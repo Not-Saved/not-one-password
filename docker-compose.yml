@@ -2,7 +2,7 @@ name: not-one-password
 services:
   app:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile.dev
     container_name: go-app
     ports:
@@ -18,11 +18,11 @@ services:
       migrate:
         condition: service_completed_successfully
     volumes:
-      - .:/app
+      - ./backend:/app
     command: air -c .air.toml
   migrate:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile.dev
     depends_on:
       db:
@@ -35,7 +35,7 @@ services:
       DB_NAME: ${POSTGRES_DB}
       APP_PORT: ${APP_PORT}
     volumes:
-      - .:/app
+      - ./backend:/app
     working_dir: /app
     command: >
       goose -dir internal/db/migrations postgres
