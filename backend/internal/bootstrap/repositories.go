@@ -3,14 +3,15 @@ package bootstrap
 import (
 	"database/sql"
 	"main/internal/adapters/repository"
+	"main/internal/core/ports"
 )
 
 type Repositories struct {
-	User *repository.UserRepository
+	ports.UserRepository
 }
 
 func NewRepositories(db *sql.DB) *Repositories {
 	return &Repositories{
-		User: repository.NewUserRepository(db),
+		UserRepository: repository.NewUserRepository(db),
 	}
 }

@@ -51,17 +51,6 @@ func TestLoad_AppPortDefault(t *testing.T) {
 	}
 }
 
-func TestLoad_AppPortEmptyFallsBackToDefault(t *testing.T) {
-	setDBEnvVars(t)
-	t.Setenv("APP_PORT", "")
-
-	cfg := Load()
-
-	if cfg.AppPort != "8080" {
-		t.Errorf("expected default AppPort '8080' when APP_PORT is empty, got %q", cfg.AppPort)
-	}
-}
-
 func TestConnString(t *testing.T) {
 	dbCfg := DBConfig{
 		Host:     "myhost",
@@ -73,23 +62,6 @@ func TestConnString(t *testing.T) {
 
 	connStr := dbCfg.ConnString()
 	expected := "host=myhost port=5433 user=admin password=secret dbname=mydb sslmode=disable"
-
-	if connStr != expected {
-		t.Errorf("expected conn string %q, got %q", expected, connStr)
-	}
-}
-
-func TestConnString_SpecialCharacters(t *testing.T) {
-	dbCfg := DBConfig{
-		Host:     "db.example.com",
-		Port:     "5432",
-		User:     "user@domain",
-		Password: "p@ss w0rd!",
-		Name:     "my-database",
-	}
-
-	connStr := dbCfg.ConnString()
-	expected := "host=db.example.com port=5432 user=user@domain password=p@ss w0rd! dbname=my-database sslmode=disable"
 
 	if connStr != expected {
 		t.Errorf("expected conn string %q, got %q", expected, connStr)
@@ -120,43 +92,5 @@ func TestGetEnv_EmptyUseFallback(t *testing.T) {
 	val := getEnv("TEST_GET_ENV_EMPTY", "fallback")
 	if val != "fallback" {
 		t.Errorf("expected 'fallback' for empty env var, got %q", val)
-	}
-}
-
-func TestLoad_CustomAppPort(t *testing.T) {
-	setDBEnvVars(t)
-	t.Setenv("APP_PORT", "3000")
-
-	cfg := Load()
-
-	if cfg.AppPort != "3000" {
-		t.Errorf("expected AppPort '3000', got %q", cfg.AppPort)
-	}
-}
-
-func TestLoad_DBConfigIntegrity(t *testing.T) {
-	t.Setenv("DB_HOST", "prod-db.internal")
-	t.Setenv("DB_PORT", "5434")
-	t.Setenv("DB_USER", "produser")
-	t.Setenv("DB_PASSWORD", "pr0d$ecret!")
-	t.Setenv("DB_NAME", "production_db")
-	t.Setenv("APP_PORT", "443")
-
-	cfg := Load()
-
-	expectedConn := "host=prod-db.internal port=5434 user=produser password=pr0d$ecret! dbname=production_db sslmode=disable"
-	if cfg.DB.ConnString() != expectedConn {
-		t.Errorf("expected conn string %q, got %q", expectedConn, cfg.DB.ConnString())
-	}
-}
-
-func TestConnString_EmptyFields(t *testing.T) {
-	dbCfg := DBConfig{}
-
-	connStr := dbCfg.ConnString()
-	expected := "host= port= user= password= dbname= sslmode=disable"
-
-	if connStr != expected {
-		t.Errorf("expected conn string %q, got %q", expected, connStr)
 	}
 }

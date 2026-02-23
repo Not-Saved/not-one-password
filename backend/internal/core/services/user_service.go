@@ -7,21 +7,21 @@ import (
 )
 
 type UserService struct {
-	repo ports.UserRepository
+	UserRepository ports.UserRepository
 }
 
-func NewUserService(repo ports.UserRepository) *UserService {
-	return &UserService{repo: repo}
+func NewUserService(userRepo ports.UserRepository) *UserService {
+	return &UserService{UserRepository: userRepo}
 }
 
 func (s *UserService) ListUsers(ctx context.Context) ([]domain.User, error) {
-	return s.repo.ListUsers(ctx)
+	return s.UserRepository.ListUsers(ctx)
 }
 
 func (s *UserService) GetUser(ctx context.Context, id int32) (domain.User, error) {
-	return s.repo.GetUser(ctx, id)
+	return s.UserRepository.GetUser(ctx, id)
 }
 
 func (s *UserService) CreateUser(ctx context.Context, name, email string) (domain.User, error) {
-	return s.repo.CreateUser(ctx, name, email)
+	return s.UserRepository.CreateUser(ctx, name, email)
 }

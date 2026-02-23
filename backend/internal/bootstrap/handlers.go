@@ -1,13 +1,15 @@
 package bootstrap
 
-import "main/internal/adapters/handler"
+import (
+	"main/internal/adapters/handler"
+)
 
 type Handlers struct {
-	User *handler.UserHandler
+	*handler.UserHandler
 }
 
 func NewHandlers(s *Services) *Handlers {
 	return &Handlers{
-		User: handler.NewUserHandler(s.User),
+		UserHandler: handler.NewUserHandler(s.UserService),
 	}
 }

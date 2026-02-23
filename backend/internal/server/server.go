@@ -2,6 +2,8 @@ package server
 
 import (
 	"main/internal/bootstrap"
+	"main/internal/docs"
+	"main/internal/oapi"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -10,21 +12,18 @@ import (
 type Server struct {
 	port string
 	mux  *http.ServeMux
-	api  *http.ServeMux
 }
 
 func New(port string) *Server {
 	return &Server{
 		port: port,
 		mux:  http.NewServeMux(),
-		api:  http.NewServeMux(),
 	}
 }
 
-func (s *Server) RegisterApiRoutes(h *bootstrap.Handlers) {
-	s.api.HandleFunc("GET /users", h.User.ListUsers)
-	s.api.HandleFunc("POST /users", h.User.CreateUser)
-	s.mux.Handle("/api/", http.StripPrefix("/api", s.api))
+func (s *Server) RegisterHandlers(handlers *bootstrap.Handlers) {
+	apiMux := oapi.HandlerFromMux(handlers, http.NewServeMux())
+	s.mux.Handle("/api/", http.StripPrefix("/api", apiMux))
 }
 
 func (s *Server) RegisterStaticRoute() {
@@ -49,6 +48,13 @@ func (s *Server) RegisterSpaRoute(filePath string) {
 		// Otherwise serve SPA
 		http.ServeFile(w, r, filepath.Join(filePath, "index.html"))
 	}))
+}
+
+func (s *Server) RegisterOpenapiRouter() {
+	s.mux.HandleFunc("/api/openapi.yaml", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/yaml")
+		w.Write(docs.OpenAPISpec)
+	})
 }
 
 func (s *Server) Start() error {

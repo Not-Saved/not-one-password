@@ -21,9 +21,10 @@ func main() {
 	handlers := bootstrap.NewHandlers(services)
 
 	srv := server.New(cfg.AppPort)
-	srv.RegisterApiRoutes(handlers)
+	srv.RegisterHandlers(handlers)
 	srv.RegisterStaticRoute()
 	srv.RegisterSpaRoute("./public")
+	srv.RegisterOpenapiRouter()
 
 	log.Printf("Server running on :%s", cfg.AppPort)
 	log.Fatal(srv.Start())

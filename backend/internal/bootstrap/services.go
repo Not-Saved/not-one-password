@@ -1,13 +1,15 @@
 package bootstrap
 
-import "main/internal/core/services"
+import (
+	"main/internal/core/services"
+)
 
 type Services struct {
-	User *services.UserService
+	*services.UserService
 }
 
 func NewServices(r *Repositories) *Services {
 	return &Services{
-		User: services.NewUserService(r.User),
+		UserService: services.NewUserService(r.UserRepository),
 	}
 }
