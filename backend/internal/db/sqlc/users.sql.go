@@ -7,33 +7,109 @@ package db
 
 import (
 	"context"
+	"database/sql"
+	"time"
+
+	"github.com/sqlc-dev/pqtype"
 )
 
+const createSession = `-- name: CreateSession :one
+
+INSERT INTO sessions (user_id, token, expires_at, user_agent, ip_address)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, user_id, token, created_at, expires_at, revoked_at, user_agent, ip_address
+`
+
+type CreateSessionParams struct {
+	UserID    int32
+	Token     string
+	ExpiresAt time.Time
+	UserAgent sql.NullString
+	IpAddress pqtype.Inet
+}
+
+// Sessions
+func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error) {
+	row := q.db.QueryRowContext(ctx, createSession,
+		arg.UserID,
+		arg.Token,
+		arg.ExpiresAt,
+		arg.UserAgent,
+		arg.IpAddress,
+	)
+	var i Session
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Token,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.RevokedAt,
+		&i.UserAgent,
+		&i.IpAddress,
+	)
+	return i, err
+}
+
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (name, email)
-VALUES ($1, $2)
-RETURNING id, name, email, created_at
+INSERT INTO users (name, email, password_hash)
+VALUES ($1, $2, $3)
+RETURNING id, name, email, password_hash, created_at, updated_at
 `
 
 type CreateUserParams struct {
-	Name  string
-	Email string
+	Name         string
+	Email        string
+	PasswordHash string
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
-	row := q.db.QueryRowContext(ctx, createUser, arg.Name, arg.Email)
+	row := q.db.QueryRowContext(ctx, createUser, arg.Name, arg.Email, arg.PasswordHash)
 	var i User
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.Email,
+		&i.PasswordHash,
 		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const deleteExpiredSessions = `-- name: DeleteExpiredSessions :exec
+DELETE FROM sessions
+WHERE expires_at <= NOW()
+`
+
+func (q *Queries) DeleteExpiredSessions(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteExpiredSessions)
+	return err
+}
+
+const getSessionByToken = `-- name: GetSessionByToken :one
+SELECT id, user_id, token, created_at, expires_at, revoked_at, user_agent, ip_address FROM sessions
+WHERE token = $1
+`
+
+func (q *Queries) GetSessionByToken(ctx context.Context, token string) (Session, error) {
+	row := q.db.QueryRowContext(ctx, getSessionByToken, token)
+	var i Session
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Token,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.RevokedAt,
+		&i.UserAgent,
+		&i.IpAddress,
 	)
 	return i, err
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, name, email, created_at FROM users
+SELECT id, name, email, password_hash, created_at, updated_at FROM users
 WHERE id = $1
 `
 
@@ -44,13 +120,74 @@ func (q *Queries) GetUser(ctx context.Context, id int32) (User, error) {
 		&i.ID,
 		&i.Name,
 		&i.Email,
+		&i.PasswordHash,
 		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
 
+const getUserByEmail = `-- name: GetUserByEmail :one
+SELECT id, name, email, password_hash, created_at, updated_at FROM users
+WHERE email = $1
+`
+
+func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUserByEmail, email)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Email,
+		&i.PasswordHash,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const listActiveSessionsByUser = `-- name: ListActiveSessionsByUser :many
+SELECT id, user_id, token, created_at, expires_at, revoked_at, user_agent, ip_address FROM sessions
+WHERE user_id = $1
+  AND revoked_at IS NULL
+  AND expires_at > NOW()
+ORDER BY created_at DESC
+`
+
+func (q *Queries) ListActiveSessionsByUser(ctx context.Context, userID int32) ([]Session, error) {
+	rows, err := q.db.QueryContext(ctx, listActiveSessionsByUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Session
+	for rows.Next() {
+		var i Session
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Token,
+			&i.CreatedAt,
+			&i.ExpiresAt,
+			&i.RevokedAt,
+			&i.UserAgent,
+			&i.IpAddress,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUsers = `-- name: ListUsers :many
-SELECT id, name, email, created_at FROM users
+SELECT id, name, email, password_hash, created_at, updated_at FROM users
 ORDER BY id
 `
 
@@ -67,7 +204,9 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.ID,
 			&i.Name,
 			&i.Email,
+			&i.PasswordHash,
 			&i.CreatedAt,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -80,4 +219,28 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const revokeAllSessionsByUser = `-- name: RevokeAllSessionsByUser :exec
+UPDATE sessions
+SET revoked_at = NOW()
+WHERE user_id = $1
+  AND revoked_at IS NULL
+`
+
+func (q *Queries) RevokeAllSessionsByUser(ctx context.Context, userID int32) error {
+	_, err := q.db.ExecContext(ctx, revokeAllSessionsByUser, userID)
+	return err
+}
+
+const revokeSessionByToken = `-- name: RevokeSessionByToken :exec
+UPDATE sessions
+SET revoked_at = NOW()
+WHERE token = $1
+  AND revoked_at IS NULL
+`
+
+func (q *Queries) RevokeSessionByToken(ctx context.Context, token string) error {
+	_, err := q.db.ExecContext(ctx, revokeSessionByToken, token)
+	return err
 }

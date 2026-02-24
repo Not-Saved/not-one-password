@@ -2,7 +2,9 @@ package handler
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
+	"strings"
 
 	"main/internal/core/domain"
 	"main/internal/core/services"
@@ -63,21 +65,22 @@ func (h *UserHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid form data")
+	var req oapi.CreateUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	name := r.FormValue("name")
-	email := r.FormValue("email")
-
-	if name == "" || email == "" {
-		writeError(w, http.StatusBadRequest, "Missing required fields: name, email")
+	req.Name = strings.TrimSpace(req.Name)
+	if req.Name == "" || req.Email == "" || req.Password == "" {
+		writeError(w, http.StatusBadRequest, "missing required fields")
 		return
 	}
 
-	user, err := h.UserService.CreateUser(r.Context(), name, email)
+	user, err := h.UserService.CreateUser(r.Context(), req.Name, string(req.Email), req.Password)
+
 	if err != nil {
+		log.Printf("create user failed: %v", err)
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -87,5 +90,43 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	response := mapToAPIUser(user)
 
+	json.NewEncoder(w).Encode(response)
+}
+
+func (h *UserHandler) LoginUser(w http.ResponseWriter, r *http.Request) {
+	var req oapi.LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	req.Email = types.Email(strings.TrimSpace(string(req.Email)))
+	if req.Email == "" || req.Password == "" {
+		writeError(w, http.StatusBadRequest, "missing required fields")
+		return
+	}
+
+	userAgent := r.UserAgent()
+	ip := r.RemoteAddr
+
+	user, session, err := h.UserService.LoginUser(r.Context(), string(req.Email), req.Password, userAgent, ip)
+
+	if err != nil {
+		log.Printf("login failed: %v", err)
+		writeError(w, http.StatusUnauthorized, "invalid email or password")
+		return
+	}
+
+	response := mapToAPIUser(*user)
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_token",
+		Value:    session.Token,
+		HttpOnly: true,
+		Secure:   false,
+		Expires:  session.ExpiresAt,
+	})
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)
 }

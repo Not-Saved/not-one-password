@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"main/internal/core/domain"
 	db "main/internal/db/sqlc"
 )
@@ -38,10 +39,24 @@ func (r *UserRepository) GetUser(ctx context.Context, id int32) (domain.User, er
 	return toDomainUser(dbUser), nil
 }
 
-func (r *UserRepository) CreateUser(ctx context.Context, name, email string) (domain.User, error) {
+func (r *UserRepository) GetUserByEmail(ctx context.Context, email string) (*domain.User, error) {
+	dbUser, err := r.queries.GetUserByEmail(ctx, email)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil // not found
+		}
+		return nil, err
+	}
+
+	u := toDomainUser(dbUser)
+	return &u, nil
+}
+
+func (r *UserRepository) CreateUser(ctx context.Context, name, email, passwordHash string) (domain.User, error) {
 	dbUser, err := r.queries.CreateUser(ctx, db.CreateUserParams{
-		Name:  name,
-		Email: email,
+		Name:         name,
+		Email:        email,
+		PasswordHash: passwordHash,
 	})
 	if err != nil {
 		return domain.User{}, err
@@ -51,9 +66,10 @@ func (r *UserRepository) CreateUser(ctx context.Context, name, email string) (do
 
 func toDomainUser(u db.User) domain.User {
 	return domain.User{
-		ID:        u.ID,
-		Name:      u.Name,
-		Email:     u.Email,
-		CreatedAt: u.CreatedAt,
+		ID:           u.ID,
+		Name:         u.Name,
+		Email:        u.Email,
+		CreatedAt:    u.CreatedAt,
+		PasswordHash: u.PasswordHash,
 	}
 }
