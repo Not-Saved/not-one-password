@@ -13,7 +13,7 @@ type Repositories struct {
 
 func NewRepositories(db *sql.DB) *Repositories {
 	return &Repositories{
-		UserRepository:    repository.NewUserRepository(db),
-		SessionRepository: repository.NewSessionRepository(db),
+		UserRepository:    repository.NewUserRepositoryPg(db),
+		SessionRepository: repository.NewSessionRepositoryInMemory(),
 	}
 }

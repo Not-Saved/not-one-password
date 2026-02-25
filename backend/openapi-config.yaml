@@ -3,4 +3,6 @@ package: oapi
 generate:
   std-http-server: true
   models: true
+  strict-server: true
+  embedded-spec: true
 output: internal/oapi/gen.go

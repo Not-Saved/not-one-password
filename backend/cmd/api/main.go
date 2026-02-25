@@ -24,7 +24,7 @@ func main() {
 	srv.RegisterHandlers(handlers)
 	srv.RegisterStaticRoute()
 	srv.RegisterSpaRoute("./public")
-	srv.RegisterOpenapiRouter()
+	srv.RegisterSwaggerRoute()
 
 	log.Printf("Server running on :%s", cfg.AppPort)
 	log.Fatal(srv.Start())

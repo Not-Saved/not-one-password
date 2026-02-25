@@ -25,14 +25,6 @@ func (s *UserService) ListUsers(ctx context.Context) ([]domain.User, error) {
 	return s.UserRepository.ListUsers(ctx)
 }
 
-func (s *UserService) GetUser(ctx context.Context, id int32) (domain.User, error) {
-	return s.UserRepository.GetUser(ctx, id)
-}
-
-func (s *UserService) GetUserByEmail(ctx context.Context, email string) (*domain.User, error) {
-	return s.UserRepository.GetUserByEmail(ctx, email)
-}
-
 func (s *UserService) LoginUser(ctx context.Context, email, password, userAgent, ip string) (*domain.User, *domain.Session, error) {
 	user, err := s.UserRepository.GetUserByEmail(ctx, email)
 	if err != nil {
@@ -44,7 +36,7 @@ func (s *UserService) LoginUser(ctx context.Context, email, password, userAgent,
 
 	err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password))
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("Invalid email or password")
 	}
 
 	token, err := generateToken()
@@ -62,7 +54,23 @@ func (s *UserService) LoginUser(ctx context.Context, email, password, userAgent,
 		return nil, nil, err
 	}
 
-	return user, &session, nil
+	return user, session, nil
+}
+
+func (s *UserService) CreateUser(ctx context.Context, name, email, password string) (*domain.User, error) {
+	existingUser, err := s.UserRepository.GetUserByEmail(ctx, email)
+	if err != nil {
+		return nil, err
+	}
+	if existingUser != nil {
+		return nil, fmt.Errorf("User already exists")
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, err
+	}
+	return s.UserRepository.CreateUser(ctx, name, email, string(hashedPassword))
 }
 
 func generateToken() (string, error) {
@@ -72,21 +80,4 @@ func generateToken() (string, error) {
 		return "", err
 	}
 	return base64.RawURLEncoding.EncodeToString(b), nil
-}
-
-func (s *UserService) CreateUser(ctx context.Context, name, email, password string) (domain.User, error) {
-	existingUser, err := s.UserRepository.GetUserByEmail(ctx, email)
-	if err != nil {
-		return domain.User{}, err
-	}
-
-	if existingUser != nil {
-		return domain.User{}, fmt.Errorf("User already exists")
-	}
-
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return domain.User{}, err
-	}
-	return s.UserRepository.CreateUser(ctx, name, email, string(hashedPassword))
 }

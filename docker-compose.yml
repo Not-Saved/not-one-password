@@ -38,7 +38,7 @@ services:
       - ./backend:/app
     working_dir: /app
     command: >
-      goose -dir internal/db/migrations postgres
+      go tool goose -dir internal/db/migrations postgres
       "host=${POSTGRES_HOST} port=${POSTGRES_PORT}
       user=${POSTGRES_USER} password=${POSTGRES_PASSWORD}
       dbname=${POSTGRES_DB} sslmode=disable"

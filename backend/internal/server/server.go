@@ -1,12 +1,17 @@
 package server
 
 import (
+	"context"
+	"encoding/json"
+	"log"
 	"main/internal/bootstrap"
-	"main/internal/docs"
 	"main/internal/oapi"
 	"net/http"
 	"os"
 	"path/filepath"
+
+	middleware "github.com/oapi-codegen/nethttp-middleware"
+	httpSwagger "github.com/swaggo/http-swagger"
 )
 
 type Server struct {
@@ -22,8 +27,17 @@ func New(port string) *Server {
 }
 
 func (s *Server) RegisterHandlers(handlers *bootstrap.Handlers) {
-	apiMux := oapi.HandlerFromMux(handlers, http.NewServeMux())
-	s.mux.Handle("/api/", http.StripPrefix("/api", apiMux))
+	handler := oapi.NewStrictHandler(handlers, nil)
+	apiMux := oapi.HandlerFromMux(handler, http.NewServeMux())
+
+	spec, err := oapi.GetSwagger()
+	if err != nil {
+		log.Fatalf("failed to load swagger spec: %v", err)
+	}
+
+	validatedHandler := middleware.OapiRequestValidator(spec)(apiMux)
+	withReqResContextHandler := withReqResContext(validatedHandler)
+	s.mux.Handle("/api/", http.StripPrefix("/api", withReqResContextHandler))
 }
 
 func (s *Server) RegisterStaticRoute() {
@@ -50,13 +64,28 @@ func (s *Server) RegisterSpaRoute(filePath string) {
 	}))
 }
 
-func (s *Server) RegisterOpenapiRouter() {
-	s.mux.HandleFunc("/api/openapi.yaml", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/yaml")
-		w.Write(docs.OpenAPISpec)
+func (s *Server) RegisterSwaggerRoute() {
+	s.mux.HandleFunc("/api/swagger.json", func(w http.ResponseWriter, r *http.Request) {
+		swagger, _ := oapi.GetSwagger()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(swagger)
 	})
+	s.mux.Handle("/api/swagger/", httpSwagger.Handler(
+		httpSwagger.URL("/api/swagger.json"),
+	))
 }
 
 func (s *Server) Start() error {
 	return http.ListenAndServe(":"+s.port, s.mux)
+}
+
+func withReqResContext(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
+		ctx = context.WithValue(ctx, "httpRequest", r)
+		ctx = context.WithValue(ctx, "httpResponseWriter", w)
+
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
 }

@@ -70,6 +70,12 @@ paths:
           $ref: "#/components/responses/InternalServerError"
 
 components:
+  securitySchemes:
+    SessionCookieAuth:
+      type: apiKey
+      in: cookie
+      name: session_token
+
   schemas:
     User:
       type: object
@@ -89,6 +95,7 @@ components:
           type: string
           format: date-time
           example: "2026-02-23T12:00:00Z"
+
     CreateUserRequest:
       type: object
       required:
@@ -105,6 +112,7 @@ components:
           type: string
           format: password
           minLength: 8
+
     LoginRequest:
       type: object
       required:

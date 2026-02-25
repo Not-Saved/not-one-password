@@ -1,10 +1,9 @@
 package handler
 
 import (
-	"encoding/json"
+	"context"
 	"log"
 	"net/http"
-	"strings"
 
 	"main/internal/core/domain"
 	"main/internal/core/services"
@@ -21,14 +20,76 @@ func NewUserHandler(service *services.UserService) *UserHandler {
 	return &UserHandler{UserService: service}
 }
 
-func writeError(w http.ResponseWriter, status int, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
+func (h *UserHandler) ListUsers(ctx context.Context, request oapi.ListUsersRequestObject) (oapi.ListUsersResponseObject, error) {
+	users, err := h.UserService.ListUsers(ctx)
+	if err != nil {
+		return oapi.ListUsers500JSONResponse{
+			InternalServerErrorJSONResponse: oapi.InternalServerErrorJSONResponse{
+				Code:    500,
+				Message: err.Error(),
+			},
+		}, nil
+	}
 
-	_ = json.NewEncoder(w).Encode(oapi.ErrorResponse{
-		Code:    status,
-		Message: message,
+	var response = make([]oapi.User, 0, len(users))
+
+	for _, u := range users {
+		response = append(response, mapToAPIUser(u))
+	}
+
+	return oapi.ListUsers200JSONResponse(response), nil
+}
+
+func (h *UserHandler) CreateUser(ctx context.Context, request oapi.CreateUserRequestObject) (oapi.CreateUserResponseObject, error) {
+	if request.Body == nil {
+		return oapi.CreateUser400JSONResponse{
+			BadRequestJSONResponse: oapi.BadRequestJSONResponse{
+				Code:    400,
+				Message: "missing request body",
+			},
+		}, nil
+	}
+
+	user, err := h.UserService.CreateUser(ctx, request.Body.Name, string(request.Body.Email), request.Body.Password)
+	if err != nil {
+		return oapi.CreateUser400JSONResponse{
+			BadRequestJSONResponse: oapi.BadRequestJSONResponse{
+				Code:    400,
+				Message: err.Error(),
+			},
+		}, nil
+	}
+
+	response := mapToAPIUser(*user)
+
+	return oapi.CreateUser201JSONResponse(response), nil
+}
+
+func (h *UserHandler) LoginUser(ctx context.Context, request oapi.LoginUserRequestObject) (oapi.LoginUserResponseObject, error) {
+	r := ctx.Value("httpRequest").(*http.Request)
+	w := ctx.Value("httpResponseWriter").(http.ResponseWriter)
+
+	userAgent := r.UserAgent()
+	ip := r.RemoteAddr
+
+	user, session, err := h.UserService.LoginUser(r.Context(), string(request.Body.Email), request.Body.Password, userAgent, ip)
+
+	if err != nil {
+		log.Printf("login failed: %v", err)
+		return oapi.LoginUser401JSONResponse{Code: 401, Message: "invalid email or password"}, nil
+	}
+
+	response := mapToAPIUser(*user)
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_token",
+		Value:    session.TokenHash,
+		HttpOnly: true,
+		Secure:   false,
+		Expires:  session.ExpiresAt,
 	})
+
+	return oapi.LoginUser200JSONResponse(response), nil
 }
 
 func mapToAPIUser(u domain.User) oapi.User {
@@ -43,90 +104,4 @@ func mapToAPIUser(u domain.User) oapi.User {
 		Email:     &email,
 		CreatedAt: &createdAt,
 	}
-}
-
-func (h *UserHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
-	users, err := h.UserService.ListUsers(r.Context())
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-
-	response := make([]oapi.User, 0, len(users))
-
-	for _, u := range users {
-		response = append(response, mapToAPIUser(u))
-	}
-
-	json.NewEncoder(w).Encode(response)
-}
-
-func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
-	var req oapi.CreateUserRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	req.Name = strings.TrimSpace(req.Name)
-	if req.Name == "" || req.Email == "" || req.Password == "" {
-		writeError(w, http.StatusBadRequest, "missing required fields")
-		return
-	}
-
-	user, err := h.UserService.CreateUser(r.Context(), req.Name, string(req.Email), req.Password)
-
-	if err != nil {
-		log.Printf("create user failed: %v", err)
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-
-	response := mapToAPIUser(user)
-
-	json.NewEncoder(w).Encode(response)
-}
-
-func (h *UserHandler) LoginUser(w http.ResponseWriter, r *http.Request) {
-	var req oapi.LoginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	req.Email = types.Email(strings.TrimSpace(string(req.Email)))
-	if req.Email == "" || req.Password == "" {
-		writeError(w, http.StatusBadRequest, "missing required fields")
-		return
-	}
-
-	userAgent := r.UserAgent()
-	ip := r.RemoteAddr
-
-	user, session, err := h.UserService.LoginUser(r.Context(), string(req.Email), req.Password, userAgent, ip)
-
-	if err != nil {
-		log.Printf("login failed: %v", err)
-		writeError(w, http.StatusUnauthorized, "invalid email or password")
-		return
-	}
-
-	response := mapToAPIUser(*user)
-
-	http.SetCookie(w, &http.Cookie{
-		Name:     "session_token",
-		Value:    session.Token,
-		HttpOnly: true,
-		Secure:   false,
-		Expires:  session.ExpiresAt,
-	})
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
 }
