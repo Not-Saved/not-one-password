@@ -51,6 +51,10 @@ paths:
       responses:
         "200":
           description: Login successful
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
           content:
             application/json:
               schema:

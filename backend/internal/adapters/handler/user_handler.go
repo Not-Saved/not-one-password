@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"main/internal/adapters/middleware"
 	"main/internal/core/domain"
 	"main/internal/core/services"
 	"main/internal/oapi"
@@ -66,13 +67,12 @@ func (h *UserHandler) CreateUser(ctx context.Context, request oapi.CreateUserReq
 }
 
 func (h *UserHandler) LoginUser(ctx context.Context, request oapi.LoginUserRequestObject) (oapi.LoginUserResponseObject, error) {
-	r := ctx.Value("httpRequest").(*http.Request)
-	w := ctx.Value("httpResponseWriter").(http.ResponseWriter)
+	ip, _ := ctx.Value(middleware.IpContextKey).(string)
+	userAgent, _ := ctx.Value(middleware.UserAgentContextKey).(string)
 
-	userAgent := r.UserAgent()
-	ip := r.RemoteAddr
+	log.Printf("Login attempt from IP=%s UA=%s", ip, userAgent)
 
-	user, session, err := h.UserService.LoginUser(r.Context(), string(request.Body.Email), request.Body.Password, userAgent, ip)
+	user, session, err := h.UserService.LoginUser(ctx, string(request.Body.Email), request.Body.Password, userAgent, ip)
 
 	if err != nil {
 		log.Printf("login failed: %v", err)
@@ -81,15 +81,18 @@ func (h *UserHandler) LoginUser(ctx context.Context, request oapi.LoginUserReque
 
 	response := mapToAPIUser(*user)
 
-	http.SetCookie(w, &http.Cookie{
+	cookie := &http.Cookie{
 		Name:     "session_token",
 		Value:    session.TokenHash,
 		HttpOnly: true,
 		Secure:   false,
 		Expires:  session.ExpiresAt,
-	})
+	}
 
-	return oapi.LoginUser200JSONResponse(response), nil
+	return oapi.LoginUser200JSONResponse{
+		Headers: oapi.LoginUser200ResponseHeaders{SetCookie: cookie.String()},
+		Body:    response,
+	}, nil
 }
 
 func mapToAPIUser(u domain.User) oapi.User {
