@@ -73,6 +73,28 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
+  /user:
+    get:
+      summary: Get current user
+      operationId: getCurrentUser
+      responses:
+        "200":
+          description: User retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: 401
+                message: User not authenticated
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 components:
   securitySchemes:
     SessionCookieAuth:
@@ -81,6 +103,20 @@ components:
       name: session_token
 
   schemas:
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        email:
+          type: string
+      required:
+        - id
+        - username
+        - email
+
     User:
       type: object
       properties:

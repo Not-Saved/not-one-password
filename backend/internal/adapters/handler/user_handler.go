@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"strconv"
 
 	"main/internal/adapters/middleware"
 	"main/internal/core/domain"
@@ -14,15 +15,15 @@ import (
 )
 
 type UserHandler struct {
-	UserService *services.UserService
+	userService *services.UserService
 }
 
 func NewUserHandler(service *services.UserService) *UserHandler {
-	return &UserHandler{UserService: service}
+	return &UserHandler{userService: service}
 }
 
 func (h *UserHandler) ListUsers(ctx context.Context, request oapi.ListUsersRequestObject) (oapi.ListUsersResponseObject, error) {
-	users, err := h.UserService.ListUsers(ctx)
+	users, err := h.userService.ListUsers(ctx)
 	if err != nil {
 		return oapi.ListUsers500JSONResponse{
 			InternalServerErrorJSONResponse: oapi.InternalServerErrorJSONResponse{
@@ -51,7 +52,7 @@ func (h *UserHandler) CreateUser(ctx context.Context, request oapi.CreateUserReq
 		}, nil
 	}
 
-	user, err := h.UserService.CreateUser(ctx, request.Body.Name, string(request.Body.Email), request.Body.Password)
+	user, err := h.userService.CreateUser(ctx, request.Body.Name, string(request.Body.Email), request.Body.Password)
 	if err != nil {
 		return oapi.CreateUser400JSONResponse{
 			BadRequestJSONResponse: oapi.BadRequestJSONResponse{
@@ -72,7 +73,7 @@ func (h *UserHandler) LoginUser(ctx context.Context, request oapi.LoginUserReque
 
 	log.Printf("Login attempt from IP=%s UA=%s", ip, userAgent)
 
-	user, session, err := h.UserService.LoginUser(ctx, string(request.Body.Email), request.Body.Password, userAgent, ip)
+	user, session, err := h.userService.LoginUser(ctx, string(request.Body.Email), request.Body.Password, userAgent, ip)
 
 	if err != nil {
 		log.Printf("login failed: %v", err)
@@ -83,7 +84,7 @@ func (h *UserHandler) LoginUser(ctx context.Context, request oapi.LoginUserReque
 
 	cookie := &http.Cookie{
 		Name:     "session_token",
-		Value:    session.TokenHash,
+		Value:    session.Token,
 		HttpOnly: true,
 		Secure:   false,
 		Expires:  session.ExpiresAt,
@@ -92,6 +93,30 @@ func (h *UserHandler) LoginUser(ctx context.Context, request oapi.LoginUserReque
 	return oapi.LoginUser200JSONResponse{
 		Headers: oapi.LoginUser200ResponseHeaders{SetCookie: cookie.String()},
 		Body:    response,
+	}, nil
+}
+
+func (s *UserHandler) GetCurrentUser(ctx context.Context, request oapi.GetCurrentUserRequestObject) (oapi.GetCurrentUserResponseObject, error) {
+	session, ok := ctx.Value(middleware.SessionContextKey).(*domain.Session)
+
+	if !ok || session == nil {
+		return &oapi.GetCurrentUser500JSONResponse{
+			InternalServerErrorJSONResponse: oapi.InternalServerErrorJSONResponse{
+				Code:    500,
+				Message: "Internal Server Error",
+			},
+		}, nil
+	}
+	if session == nil {
+		return oapi.GetCurrentUser401JSONResponse{
+			Code:    401,
+			Message: "Unauthorized",
+		}, nil
+	}
+	return &oapi.GetCurrentUser200JSONResponse{
+		Email:    session.UserEmail,
+		Id:       strconv.FormatInt(int64(session.UserID), 10),
+		Username: session.UserName,
 	}, nil
 }
 

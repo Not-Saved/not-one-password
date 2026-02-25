@@ -27,7 +27,7 @@ func New(port string) *Server {
 	}
 }
 
-func (s *Server) RegisterHandlers(handlers *bootstrap.Handlers) {
+func (s *Server) RegisterHandlers(handlers *bootstrap.Handlers, services *bootstrap.Services) {
 	si := oapi.NewStrictHandler(handlers, nil)
 	apiMux := oapi.HandlerFromMux(si, http.NewServeMux())
 
@@ -46,6 +46,7 @@ func (s *Server) RegisterHandlers(handlers *bootstrap.Handlers) {
 			})
 		},
 	})(apiMux)
+	handler = middleware.AuthenticatedMiddleware(handler, services.UserService)
 	handler = middleware.ClientInfoMiddleware(handler)
 	s.mux.Handle("/api/", http.StripPrefix("/api", handler))
 }

@@ -21,7 +21,7 @@ func main() {
 	handlers := bootstrap.NewHandlers(services)
 
 	srv := server.New(cfg.AppPort)
-	srv.RegisterHandlers(handlers)
+	srv.RegisterHandlers(handlers, services)
 	srv.RegisterStaticRoute()
 	srv.RegisterSpaRoute("./public")
 	srv.RegisterSwaggerRoute()

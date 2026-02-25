@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"main/internal/core/domain"
+	"strconv"
 	"sync"
 	"time"
 
@@ -25,7 +26,7 @@ func NewSessionRepositoryInMemory() *SessionRepositoryInMemory {
 
 func (r *SessionRepositoryInMemory) CreateSession(
 	ctx context.Context,
-	userID int32,
+	user *domain.User,
 	tokenHash string,
 	expiresAt time.Time,
 	userAgent,
@@ -42,7 +43,9 @@ func (r *SessionRepositoryInMemory) CreateSession(
 
 	session := domain.Session{
 		ID:        uuid.NewString(),
-		UserID:    userID,
+		UserID:    user.ID,
+		UserName:  user.Name,
+		UserEmail: user.Email,
 		TokenHash: tokenHash,
 		CreatedAt: time.Now(),
 		ExpiresAt: expiresAt,
@@ -51,7 +54,7 @@ func (r *SessionRepositoryInMemory) CreateSession(
 	}
 
 	r.sessionsByToken[tokenHash] = session
-	r.sessionsByUserID[string(session.UserID)] = session
+	r.sessionsByUserID[strconv.FormatInt(int64(session.UserID), 10)] = session
 
 	return &session, nil
 }
@@ -71,7 +74,7 @@ func (r *SessionRepositoryInMemory) GetSessionByToken(
 
 	if time.Now().After(session.ExpiresAt) {
 		delete(r.sessionsByToken, token)
-		delete(r.sessionsByUserID, string(session.UserID))
+		delete(r.sessionsByUserID, strconv.FormatInt(int64(session.UserID), 10))
 		return nil, fmt.Errorf("session expired")
 	}
 

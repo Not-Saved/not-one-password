@@ -3,7 +3,9 @@ package services
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"main/internal/core/domain"
 	"main/internal/core/ports"
@@ -13,20 +15,20 @@ import (
 )
 
 type UserService struct {
-	UserRepository    ports.UserRepository
-	SessionRepository ports.SessionRepository
+	userRepository    ports.UserRepository
+	sessionRepository ports.SessionRepository
 }
 
 func NewUserService(userRepo ports.UserRepository, sessionRepo ports.SessionRepository) *UserService {
-	return &UserService{UserRepository: userRepo, SessionRepository: sessionRepo}
+	return &UserService{userRepository: userRepo, sessionRepository: sessionRepo}
 }
 
 func (s *UserService) ListUsers(ctx context.Context) ([]domain.User, error) {
-	return s.UserRepository.ListUsers(ctx)
+	return s.userRepository.ListUsers(ctx)
 }
 
-func (s *UserService) LoginUser(ctx context.Context, email, password, userAgent, ip string) (*domain.User, *domain.Session, error) {
-	user, err := s.UserRepository.GetUserByEmail(ctx, email)
+func (s *UserService) LoginUser(ctx context.Context, email, password, userAgent, ip string) (*domain.User, *domain.SessionLight, error) {
+	user, err := s.userRepository.GetUserByEmail(ctx, email)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -43,22 +45,22 @@ func (s *UserService) LoginUser(ctx context.Context, email, password, userAgent,
 	if err != nil {
 		return nil, nil, err
 	}
-	hashedToken, err := bcrypt.GenerateFromPassword([]byte(token), bcrypt.DefaultCost)
+	hashedToken := hashToken(token)
+	session, err := s.sessionRepository.CreateSession(ctx, user, hashedToken, time.Now().Add(24*time.Hour), userAgent, ip)
+	sessionLight := &domain.SessionLight{
+		Token:     token,
+		ExpiresAt: session.ExpiresAt,
+	}
+
 	if err != nil {
 		return nil, nil, err
 	}
 
-	session, err := s.SessionRepository.CreateSession(ctx, user.ID, string(hashedToken), time.Now().Add(24*time.Hour), userAgent, ip)
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return user, session, nil
+	return user, sessionLight, nil
 }
 
 func (s *UserService) CreateUser(ctx context.Context, name, email, password string) (*domain.User, error) {
-	existingUser, err := s.UserRepository.GetUserByEmail(ctx, email)
+	existingUser, err := s.userRepository.GetUserByEmail(ctx, email)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +72,19 @@ func (s *UserService) CreateUser(ctx context.Context, name, email, password stri
 	if err != nil {
 		return nil, err
 	}
-	return s.UserRepository.CreateUser(ctx, name, email, string(hashedPassword))
+	return s.userRepository.CreateUser(ctx, name, email, string(hashedPassword))
+}
+
+func (s *UserService) GetSessionByToken(ctx context.Context, token string) (*domain.Session, error) {
+	hashedToken := hashToken(token)
+
+	session, err := s.sessionRepository.GetSessionByToken(ctx, hashedToken)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return session, nil
 }
 
 func generateToken() (string, error) {
@@ -80,4 +94,9 @@ func generateToken() (string, error) {
 		return "", err
 	}
 	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
+func hashToken(token string) string {
+	h := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(h[:])
 }

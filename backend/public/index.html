@@ -7,18 +7,44 @@
     </head>
     <body>
         <div id="app">
-            <h1>Hello from SPA</h1>
-            <button id="btn">Call API</button>
+            <h1>Hello</h1>
+            <button id="btn">Login</button>
             <p id="output"></p>
+            <button id="btn2">Get user</button>
+            <p id="output2"></p>
         </div>
 
         <script>
             document
                 .getElementById("btn")
                 .addEventListener("click", async () => {
-                    const res = await fetch("/api/users");
+                    const res = await fetch("http://localhost:8080/api/login", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                            email: "test@test.com",
+                            password: "password",
+                        }),
+                        // This tells fetch to include cookies
+                        credentials: "include",
+                    });
+
                     const text = await res.text();
                     document.getElementById("output").textContent = text;
+                });
+            document
+                .getElementById("btn2")
+                .addEventListener("click", async () => {
+                    const res = await fetch("http://localhost:8080/api/user", {
+                        method: "GET",
+                        // This tells fetch to include cookies
+                        credentials: "include",
+                    });
+
+                    const text = await res.text();
+                    document.getElementById("output2").textContent = text;
                 });
         </script>
     </body>

@@ -15,7 +15,7 @@ type UserRepository interface {
 type SessionRepository interface {
 	CreateSession(
 		ctx context.Context,
-		userID int32,
+		user *domain.User,
 		tokenHash string,
 		expiresAt time.Time,
 		userAgent string,
