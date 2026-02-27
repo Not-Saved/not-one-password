@@ -19,9 +19,10 @@ func main() {
 	repos := bootstrap.NewRepositories(dbConn)
 	services := bootstrap.NewServices(repos)
 	handlers := bootstrap.NewHandlers(services)
+	middlewares := bootstrap.NewMiddlewares(services)
 
 	srv := server.New(cfg.AppPort)
-	srv.RegisterHandlers(handlers, services)
+	srv.RegisterHandlersAndMiddlewares(handlers, middlewares)
 	srv.RegisterStaticRoute()
 	srv.RegisterSpaRoute("./public")
 	srv.RegisterSwaggerRoute()

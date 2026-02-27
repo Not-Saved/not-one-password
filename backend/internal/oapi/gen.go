@@ -23,6 +23,10 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+const (
+	SessionCookieScopes = "SessionCookie.Scopes"
+)
+
 // CreateUserRequest defines model for CreateUserRequest.
 type CreateUserRequest struct {
 	Email    openapi_types.Email `json:"email"`
@@ -110,6 +114,12 @@ func (siw *ServerInterfaceWrapper) LoginUser(w http.ResponseWriter, r *http.Requ
 
 // GetCurrentUser operation middleware
 func (siw *ServerInterfaceWrapper) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetCurrentUser(w, r)
@@ -594,21 +604,22 @@ func (sh *strictHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/9RWTY/bNhD9KwRbIBetLXuTotCpm00QuN0WRba5tCgKVhpb3EhDZTjarbvQfy9IyvqI",
-	"5MRNvYfebEocvnnvzaMeZWrKyiAgW5k8SgJbGbTg/7xU2Vv4UINl9y81yID+p6qqQqeKtcHlnTXo1uAv",
-	"VVYFhDczkMnzOI5kCdaqHchE/qit1bgTBB9qTZCJrYYiE89QlfBMNpG0aQ6lcvu/JtjKRH617LEtw1O7",
-	"fE1k6G2LUjZNE8kMbEq6cmhkIjd4rwqdCY1Vza7uBhkIVXELdA/k939JOy/G7dyaEjh3DT0Asngggzth",
-	"UHAOwvqTztpTaKGtLMA30XQHeLWuCRTDOws0EK0iUwGxDoJCqXThfmwNlYpl0q5EkveV68oyadw55E4W",
-	"9+bkQaWsfTCUjcp0i5EsNd4A7jiXybeTuk0kD/rL5LdwSNSB6Kr83m00f95B6mUckzRpLYg00M3r1VbR",
-	"yLALinQKDl49wu/n0Psj+4pzoG/MTuM55Pgc659GehLBzjlTjMFV2RWPGVvH628u4vXF+vKX1TqJ4ySO",
-	"f5VRDy1TDBesvbyTZl4f+u7r3Zkcv2v/LlJTDmsdJWXzalRkNdijkS/Xcs4AP7XG7s/+3uQoXhmYpXGW",
-	"puM27CSdgNXZ7HJtnfNmZ+0jEbXTuXv9MDVTJV0qQFqT5v2tS4cA7Bas1QavjXmv4ap24/kotQuX1C/J",
-	"w8hLG978g817wJ4TVekfYB/SSePWeMCaPYOOE3H180ZG8h7IhtBaLeJF7Fo0FaCqtEzk5SJeXHofcu5R",
-	"LQs3IJ5GEybEkemTeJPJJMyPN2bgAiy/NNn+hPw+LXlH89mMGWeqwS8MbsR1HJ/tbN/WTNh7TMLWaQrW",
-	"bmvn/BxUBtTqyBdBxPFJH3vH1X0e0M6B6LpaDi55v2X1ZXf9ang5Hu5gb1FhSHTBc7478R2qmnND+m/w",
-	"ZV+c0uzct4AfmLosFe0PVg6udA+WdZuKO5ix5xvg65oIkDuPPqFZPsmGg03ApOEesoF7iv35ZPWHoGHh",
-	"mAdktx/+B5q+ARZp0EnUYepaZe1RaW+09aLa/6qqZijtaVnQZy2R2s8RdCUKbVmYrQjoz8eR61eoougL",
-	"zydy/5X5RJE8/Yw9KZdXT57L3v1p+ByaGbB/HbVnEi7wJZRAeDi4u2n+CQAA//8uc0e42A0AAA==",
+	"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",
+	"DQAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

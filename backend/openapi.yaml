@@ -77,6 +77,8 @@ paths:
     get:
       summary: Get current user
       operationId: getCurrentUser
+      security:
+        - SessionCookie: []
       responses:
         "200":
           description: User retrieved successfully
@@ -97,7 +99,7 @@ paths:
           $ref: "#/components/responses/InternalServerError"
 components:
   securitySchemes:
-    SessionCookieAuth:
+    SessionCookie:
       type: apiKey
       in: cookie
       name: session_token

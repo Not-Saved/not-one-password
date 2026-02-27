@@ -2,7 +2,7 @@ package middleware
 
 import "net/http"
 
-func CORSMiddleware(next http.Handler) http.Handler {
+func (m *Middleware) CORSMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Allow any origin (change to specific domains in production)
 		w.Header().Set("Access-Control-Allow-Origin", "*")

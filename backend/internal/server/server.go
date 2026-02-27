@@ -4,14 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"log"
-	"main/internal/adapters/middleware"
 	"main/internal/bootstrap"
 	"main/internal/oapi"
 	"net/http"
 	"os"
 	"path/filepath"
 
-	nethttpmiddleware "github.com/oapi-codegen/nethttp-middleware"
 	httpSwagger "github.com/swaggo/http-swagger"
 )
 
@@ -27,27 +25,16 @@ func New(port string) *Server {
 	}
 }
 
-func (s *Server) RegisterHandlers(handlers *bootstrap.Handlers, services *bootstrap.Services) {
-	si := oapi.NewStrictHandler(handlers, nil)
-	apiMux := oapi.HandlerFromMux(si, http.NewServeMux())
-
+func (s *Server) RegisterHandlersAndMiddlewares(handlers *bootstrap.Handlers, middlewares *bootstrap.Middlewares) {
 	spec, err := oapi.GetSwagger()
 	if err != nil {
 		log.Fatalf("failed to load swagger spec: %v", err)
 	}
 
-	handler := nethttpmiddleware.OapiRequestValidatorWithOptions(spec, &nethttpmiddleware.Options{
-		ErrorHandler: func(w http.ResponseWriter, message string, statusCode int) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(statusCode)
-			json.NewEncoder(w).Encode(oapi.ErrorResponse{
-				Code:    statusCode,
-				Message: message,
-			})
-		},
-	})(apiMux)
-	handler = middleware.AuthenticatedMiddleware(handler, services.UserService)
-	handler = middleware.ClientInfoMiddleware(handler)
+	si := oapi.NewStrictHandler(handlers, []oapi.StrictMiddlewareFunc{middlewares.AuthMiddleware})
+	handler := oapi.HandlerFromMux(si, http.NewServeMux())
+	handler = middlewares.OapiRequestValidatorMiddleware(handler, spec)
+	handler = middlewares.ClientInfoMiddleware(handler)
 	s.mux.Handle("/api/", http.StripPrefix("/api", handler))
 }
 

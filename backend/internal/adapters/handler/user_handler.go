@@ -2,16 +2,11 @@ package handler
 
 import (
 	"context"
-	"log"
-	"net/http"
 	"strconv"
 
 	"main/internal/adapters/middleware"
-	"main/internal/core/domain"
 	"main/internal/core/services"
 	"main/internal/oapi"
-
-	"github.com/oapi-codegen/runtime/types"
 )
 
 type UserHandler struct {
@@ -67,39 +62,10 @@ func (h *UserHandler) CreateUser(ctx context.Context, request oapi.CreateUserReq
 	return oapi.CreateUser201JSONResponse(response), nil
 }
 
-func (h *UserHandler) LoginUser(ctx context.Context, request oapi.LoginUserRequestObject) (oapi.LoginUserResponseObject, error) {
-	ip, _ := ctx.Value(middleware.IpContextKey).(string)
-	userAgent, _ := ctx.Value(middleware.UserAgentContextKey).(string)
-
-	log.Printf("Login attempt from IP=%s UA=%s", ip, userAgent)
-
-	user, session, err := h.userService.LoginUser(ctx, string(request.Body.Email), request.Body.Password, userAgent, ip)
-
-	if err != nil {
-		log.Printf("login failed: %v", err)
-		return oapi.LoginUser401JSONResponse{Code: 401, Message: "invalid email or password"}, nil
-	}
-
-	response := mapToAPIUser(*user)
-
-	cookie := &http.Cookie{
-		Name:     "session_token",
-		Value:    session.Token,
-		HttpOnly: true,
-		Secure:   false,
-		Expires:  session.ExpiresAt,
-	}
-
-	return oapi.LoginUser200JSONResponse{
-		Headers: oapi.LoginUser200ResponseHeaders{SetCookie: cookie.String()},
-		Body:    response,
-	}, nil
-}
-
 func (s *UserHandler) GetCurrentUser(ctx context.Context, request oapi.GetCurrentUserRequestObject) (oapi.GetCurrentUserResponseObject, error) {
-	session, ok := ctx.Value(middleware.SessionContextKey).(*domain.Session)
+	session, ok := middleware.GetSession(ctx)
 
-	if !ok || session == nil {
+	if !ok {
 		return &oapi.GetCurrentUser500JSONResponse{
 			InternalServerErrorJSONResponse: oapi.InternalServerErrorJSONResponse{
 				Code:    500,
@@ -118,18 +84,4 @@ func (s *UserHandler) GetCurrentUser(ctx context.Context, request oapi.GetCurren
 		Id:       strconv.FormatInt(int64(session.UserID), 10),
 		Username: session.UserName,
 	}, nil
-}
-
-func mapToAPIUser(u domain.User) oapi.User {
-	id := u.ID
-	name := u.Name
-	email := types.Email(u.Email)
-	createdAt := u.CreatedAt
-
-	return oapi.User{
-		ID:        &id,
-		Name:      &name,
-		Email:     &email,
-		CreatedAt: &createdAt,
-	}
 }
