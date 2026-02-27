@@ -42,10 +42,12 @@ func (r *SessionRepositoryInMemory) CreateSession(
 	}
 
 	session := domain.Session{
-		ID:        uuid.NewString(),
-		UserID:    user.ID,
-		UserName:  user.Name,
-		UserEmail: user.Email,
+		ID: uuid.NewString(),
+		User: domain.SessionUser{
+			ID:    user.ID,
+			Name:  user.Name,
+			Email: user.Email,
+		},
 		TokenHash: tokenHash,
 		CreatedAt: time.Now(),
 		ExpiresAt: expiresAt,
@@ -54,7 +56,7 @@ func (r *SessionRepositoryInMemory) CreateSession(
 	}
 
 	r.sessionsByToken[tokenHash] = session
-	r.sessionsByUserID[strconv.FormatInt(int64(session.UserID), 10)] = session
+	r.sessionsByUserID[strconv.FormatInt(int64(session.User.ID), 10)] = session
 
 	return &session, nil
 }
@@ -74,7 +76,7 @@ func (r *SessionRepositoryInMemory) GetSessionByToken(
 
 	if time.Now().After(session.ExpiresAt) {
 		delete(r.sessionsByToken, token)
-		delete(r.sessionsByUserID, strconv.FormatInt(int64(session.UserID), 10))
+		delete(r.sessionsByUserID, strconv.FormatInt(int64(session.User.ID), 10))
 		return nil, fmt.Errorf("session expired")
 	}
 

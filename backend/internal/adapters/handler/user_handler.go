@@ -80,8 +80,8 @@ func (s *UserHandler) GetCurrentUser(ctx context.Context, request oapi.GetCurren
 		}, nil
 	}
 	return &oapi.GetCurrentUser200JSONResponse{
-		Email:    session.UserEmail,
-		Id:       strconv.FormatInt(int64(session.UserID), 10),
-		Username: session.UserName,
+		Email:    session.User.Email,
+		Id:       strconv.FormatInt(int64(session.User.ID), 10),
+		Username: session.User.Name,
 	}, nil
 }
