@@ -8,6 +8,6 @@ type Middlewares struct {
 
 func NewMiddlewares(s *Services) *Middlewares {
 	return &Middlewares{
-		Middleware: middleware.NewMiddleware(s.UserService),
+		Middleware: middleware.NewMiddleware(s.AuthService),
 	}
 }

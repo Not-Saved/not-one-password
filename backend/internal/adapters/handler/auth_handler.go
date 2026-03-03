@@ -5,44 +5,61 @@ import (
 	"main/internal/adapters/middleware"
 	"main/internal/core/services"
 	"main/internal/oapi"
-	"net/http"
 	"time"
 )
 
 type AuthHandler struct {
 	userService *services.UserService
+	authService *services.AuthService
 }
 
-func NewAuthHandler(service *services.UserService) *AuthHandler {
-	return &AuthHandler{userService: service}
+func NewAuthHandler(userService *services.UserService, authService *services.AuthService) *AuthHandler {
+	return &AuthHandler{userService: userService, authService: authService}
 }
 
-func (h *AuthHandler) LoginUser(ctx context.Context, request oapi.LoginUserRequestObject) (oapi.LoginUserResponseObject, error) {
-	ip, _ := ctx.Value(middleware.IpContextKey).(string)
-	userAgent, _ := ctx.Value(middleware.UserAgentContextKey).(string)
+func (h *AuthHandler) IssueToken(ctx context.Context, request oapi.IssueTokenRequestObject) (oapi.IssueTokenResponseObject, error) {
 
-	user, session, err := h.userService.LoginUser(ctx, string(request.Body.Email), request.Body.Password, userAgent, ip)
+	_, access, refresh, err := h.authService.CreateToken(ctx, string(request.Body.Email), request.Body.Password, request.Body.DeviceID)
 
 	if err != nil {
-		return oapi.LoginUser401JSONResponse{Code: 401, Message: "invalid email or password"}, nil
+		return oapi.IssueToken401JSONResponse{Code: 401, Message: "invalid email or password"}, nil
 	}
 
-	response := mapToAPIUser(*user)
-
-	cookie := NewAuthCookie(session.Token, session.ExpiresAt)
-
-	return oapi.LoginUser200JSONResponse{
-		Headers: oapi.LoginUser200ResponseHeaders{SetCookie: cookie.String()},
-		Body:    response,
+	return oapi.IssueToken200JSONResponse{
+		Headers: oapi.IssueToken200ResponseHeaders{},
+		Body: oapi.TokenResponse{
+			AccessToken:  access.Token,
+			RefreshToken: refresh.Token,
+			ExpiresIn:    int(time.Until(access.ExpiresAt).Seconds()),
+		},
 	}, nil
 }
 
-func NewAuthCookie(token string, expiresAt time.Time) *http.Cookie {
-	return &http.Cookie{
-		Name:     middleware.AuthCookieName,
-		HttpOnly: true,
-		Secure:   true,
-		Expires:  expiresAt,
-		Value:    token,
+func (h *AuthHandler) RefreshToken(ctx context.Context, request oapi.RefreshTokenRequestObject) (oapi.RefreshTokenResponseObject, error) {
+	refreshToken, ok := middleware.GetRefreshToken(ctx)
+	if !ok {
+		return &oapi.RefreshToken500JSONResponse{
+			InternalServerErrorJSONResponse: oapi.InternalServerErrorJSONResponse{
+				Code:    500,
+				Message: "Internal Server Error",
+			},
+		}, nil
 	}
+
+	newAccessSession, newRefreshSession, err := h.authService.RefreshToken(ctx, refreshToken, request.Body.DeviceID)
+	if err != nil {
+		return &oapi.RefreshToken401JSONResponse{
+			Code:    401,
+			Message: "Invalid or expired refresh token",
+		}, nil
+	}
+
+	return oapi.RefreshToken200JSONResponse{
+		Headers: oapi.RefreshToken200ResponseHeaders{},
+		Body: oapi.TokenResponse{
+			AccessToken:  newAccessSession.Token,
+			RefreshToken: newRefreshSession.Token,
+			ExpiresIn:    int(time.Until(newAccessSession.ExpiresAt).Seconds()),
+		},
+	}, nil
 }

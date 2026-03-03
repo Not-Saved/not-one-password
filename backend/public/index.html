@@ -9,42 +9,80 @@
         <div id="app">
             <h1>Hello</h1>
             <button id="btn">Login</button>
-            <p id="output"></p>
+            <p id="access_token"></p>
+            <p id="refresh_token"></p>
             <button id="btn2">Get user</button>
             <p id="output2"></p>
+            <button id="btn3">Refresh token</button>
         </div>
 
         <script>
+            let token = "";
+            let refresh = "";
+            let deviceID = "web"; // You can change this to a unique identifier for each device
+
             document
                 .getElementById("btn")
                 .addEventListener("click", async () => {
-                    const res = await fetch("http://localhost:8080/api/login", {
+                    const res = await fetch("http://localhost:8080/api/token", {
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",
                         },
                         body: JSON.stringify({
-                            email: "test@test.com",
+                            email: "test@test.it",
                             password: "password",
+                            deviceID: deviceID,
                         }),
-                        // This tells fetch to include cookies
-                        credentials: "include",
                     });
+                    const jsonRes = await res.json();
 
-                    const text = await res.text();
-                    document.getElementById("output").textContent = text;
+                    token = jsonRes.accessToken;
+                    refresh = jsonRes.refreshToken;
+                    document.getElementById("access_token").textContent = token;
+                    document.getElementById("refresh_token").textContent =
+                        refresh;
                 });
             document
                 .getElementById("btn2")
                 .addEventListener("click", async () => {
                     const res = await fetch("http://localhost:8080/api/user", {
                         method: "GET",
-                        // This tells fetch to include cookies
                         credentials: "include",
+                        headers: {
+                            Authorization: "Bearer " + token,
+                        },
                     });
 
                     const text = await res.text();
                     document.getElementById("output2").textContent = text;
+                });
+
+            document
+                .getElementById("btn3")
+                .addEventListener("click", async () => {
+                    const res = await fetch(
+                        "http://localhost:8080/api/refresh",
+                        {
+                            method: "POST",
+                            credentials: "include",
+                            headers: {
+                                "Content-Type": "application/json",
+                                Authorization: "Bearer " + refresh,
+                            },
+                            body: JSON.stringify({
+                                deviceID: deviceID,
+                            }),
+                        },
+                    );
+
+                    const jsonRes = await res.json();
+
+                    token = jsonRes.accessToken;
+                    refresh = jsonRes.refreshToken;
+                    document.getElementById("access_token").textContent = token;
+                    document.getElementById("refresh_token").textContent =
+                        refresh;
                 });
         </script>
     </body>

@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	SessionCookieScopes = "SessionCookie.Scopes"
+	BearerAuthScopes = "BearerAuth.Scopes"
 )
 
 // CreateUserRequest defines model for CreateUserRequest.
@@ -42,8 +42,29 @@ type ErrorResponse struct {
 
 // LoginRequest defines model for LoginRequest.
 type LoginRequest struct {
+	// DeviceID Unique identifier for the client device (used for token management)
+	DeviceID string              `json:"deviceID"`
 	Email    openapi_types.Email `json:"email"`
 	Password string              `json:"password"`
+}
+
+// RefreshRequest defines model for RefreshRequest.
+type RefreshRequest struct {
+	// DeviceID Unique identifier for the client device (used for token management)
+	DeviceID string `json:"deviceID"`
+}
+
+// TokenResponse defines model for TokenResponse.
+type TokenResponse struct {
+	// AccessToken JWT access token
+	AccessToken string `json:"accessToken"`
+
+	// ExpiresIn Access token expiration time in seconds
+	ExpiresIn int `json:"expiresIn"`
+
+	// RefreshToken Refresh token
+	RefreshToken string  `json:"refreshToken"`
+	TokenType    *string `json:"tokenType,omitempty"`
 }
 
 // User defines model for User.
@@ -67,17 +88,23 @@ type BadRequest = ErrorResponse
 // InternalServerError defines model for InternalServerError.
 type InternalServerError = ErrorResponse
 
-// LoginUserJSONRequestBody defines body for LoginUser for application/json ContentType.
-type LoginUserJSONRequestBody = LoginRequest
+// RefreshTokenJSONRequestBody defines body for RefreshToken for application/json ContentType.
+type RefreshTokenJSONRequestBody = RefreshRequest
+
+// IssueTokenJSONRequestBody defines body for IssueToken for application/json ContentType.
+type IssueTokenJSONRequestBody = LoginRequest
 
 // CreateUserJSONRequestBody defines body for CreateUser for application/json ContentType.
 type CreateUserJSONRequestBody = CreateUserRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
-	// User login
-	// (POST /login)
-	LoginUser(w http.ResponseWriter, r *http.Request)
+	// Refresh access and refresh tokens
+	// (POST /refresh)
+	RefreshToken(w http.ResponseWriter, r *http.Request)
+	// Issue access and refresh tokens
+	// (POST /token)
+	IssueToken(w http.ResponseWriter, r *http.Request)
 	// Get current user
 	// (GET /user)
 	GetCurrentUser(w http.ResponseWriter, r *http.Request)
@@ -98,11 +125,31 @@ type ServerInterfaceWrapper struct {
 
 type MiddlewareFunc func(http.Handler) http.Handler
 
-// LoginUser operation middleware
-func (siw *ServerInterfaceWrapper) LoginUser(w http.ResponseWriter, r *http.Request) {
+// RefreshToken operation middleware
+func (siw *ServerInterfaceWrapper) RefreshToken(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.LoginUser(w, r)
+		siw.Handler.RefreshToken(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// IssueToken operation middleware
+func (siw *ServerInterfaceWrapper) IssueToken(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.IssueToken(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -117,7 +164,7 @@ func (siw *ServerInterfaceWrapper) GetCurrentUser(w http.ResponseWriter, r *http
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
 
 	r = r.WithContext(ctx)
 
@@ -280,7 +327,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
-	m.HandleFunc("POST "+options.BaseURL+"/login", wrapper.LoginUser)
+	m.HandleFunc("POST "+options.BaseURL+"/refresh", wrapper.RefreshToken)
+	m.HandleFunc("POST "+options.BaseURL+"/token", wrapper.IssueToken)
 	m.HandleFunc("GET "+options.BaseURL+"/user", wrapper.GetCurrentUser)
 	m.HandleFunc("GET "+options.BaseURL+"/users", wrapper.ListUsers)
 	m.HandleFunc("POST "+options.BaseURL+"/users", wrapper.CreateUser)
@@ -292,24 +340,24 @@ type BadRequestJSONResponse ErrorResponse
 
 type InternalServerErrorJSONResponse ErrorResponse
 
-type LoginUserRequestObject struct {
-	Body *LoginUserJSONRequestBody
+type RefreshTokenRequestObject struct {
+	Body *RefreshTokenJSONRequestBody
 }
 
-type LoginUserResponseObject interface {
-	VisitLoginUserResponse(w http.ResponseWriter) error
+type RefreshTokenResponseObject interface {
+	VisitRefreshTokenResponse(w http.ResponseWriter) error
 }
 
-type LoginUser200ResponseHeaders struct {
+type RefreshToken200ResponseHeaders struct {
 	SetCookie string
 }
 
-type LoginUser200JSONResponse struct {
-	Body    User
-	Headers LoginUser200ResponseHeaders
+type RefreshToken200JSONResponse struct {
+	Body    TokenResponse
+	Headers RefreshToken200ResponseHeaders
 }
 
-func (response LoginUser200JSONResponse) VisitLoginUserResponse(w http.ResponseWriter) error {
+func (response RefreshToken200JSONResponse) VisitRefreshTokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Set-Cookie", fmt.Sprint(response.Headers.SetCookie))
 	w.WriteHeader(200)
@@ -317,29 +365,74 @@ func (response LoginUser200JSONResponse) VisitLoginUserResponse(w http.ResponseW
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
-type LoginUser400JSONResponse struct{ BadRequestJSONResponse }
+type RefreshToken401JSONResponse ErrorResponse
 
-func (response LoginUser400JSONResponse) VisitLoginUserResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type LoginUser401JSONResponse ErrorResponse
-
-func (response LoginUser401JSONResponse) VisitLoginUserResponse(w http.ResponseWriter) error {
+func (response RefreshToken401JSONResponse) VisitRefreshTokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
 
 	return json.NewEncoder(w).Encode(response)
 }
 
-type LoginUser500JSONResponse struct {
+type RefreshToken500JSONResponse struct {
 	InternalServerErrorJSONResponse
 }
 
-func (response LoginUser500JSONResponse) VisitLoginUserResponse(w http.ResponseWriter) error {
+func (response RefreshToken500JSONResponse) VisitRefreshTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type IssueTokenRequestObject struct {
+	Body *IssueTokenJSONRequestBody
+}
+
+type IssueTokenResponseObject interface {
+	VisitIssueTokenResponse(w http.ResponseWriter) error
+}
+
+type IssueToken200ResponseHeaders struct {
+	SetCookie string
+}
+
+type IssueToken200JSONResponse struct {
+	Body    TokenResponse
+	Headers IssueToken200ResponseHeaders
+}
+
+func (response IssueToken200JSONResponse) VisitIssueTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Set-Cookie", fmt.Sprint(response.Headers.SetCookie))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type IssueToken400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response IssueToken400JSONResponse) VisitIssueTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type IssueToken401JSONResponse ErrorResponse
+
+func (response IssueToken401JSONResponse) VisitIssueTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type IssueToken500JSONResponse struct {
+	InternalServerErrorJSONResponse
+}
+
+func (response IssueToken500JSONResponse) VisitIssueTokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
 
@@ -448,9 +541,12 @@ func (response CreateUser500JSONResponse) VisitCreateUserResponse(w http.Respons
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
-	// User login
-	// (POST /login)
-	LoginUser(ctx context.Context, request LoginUserRequestObject) (LoginUserResponseObject, error)
+	// Refresh access and refresh tokens
+	// (POST /refresh)
+	RefreshToken(ctx context.Context, request RefreshTokenRequestObject) (RefreshTokenResponseObject, error)
+	// Issue access and refresh tokens
+	// (POST /token)
+	IssueToken(ctx context.Context, request IssueTokenRequestObject) (IssueTokenResponseObject, error)
 	// Get current user
 	// (GET /user)
 	GetCurrentUser(ctx context.Context, request GetCurrentUserRequestObject) (GetCurrentUserResponseObject, error)
@@ -491,11 +587,11 @@ type strictHandler struct {
 	options     StrictHTTPServerOptions
 }
 
-// LoginUser operation middleware
-func (sh *strictHandler) LoginUser(w http.ResponseWriter, r *http.Request) {
-	var request LoginUserRequestObject
+// RefreshToken operation middleware
+func (sh *strictHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
+	var request RefreshTokenRequestObject
 
-	var body LoginUserJSONRequestBody
+	var body RefreshTokenJSONRequestBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
 		return
@@ -503,18 +599,49 @@ func (sh *strictHandler) LoginUser(w http.ResponseWriter, r *http.Request) {
 	request.Body = &body
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.LoginUser(ctx, request.(LoginUserRequestObject))
+		return sh.ssi.RefreshToken(ctx, request.(RefreshTokenRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "LoginUser")
+		handler = middleware(handler, "RefreshToken")
 	}
 
 	response, err := handler(r.Context(), w, r, request)
 
 	if err != nil {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(LoginUserResponseObject); ok {
-		if err := validResponse.VisitLoginUserResponse(w); err != nil {
+	} else if validResponse, ok := response.(RefreshTokenResponseObject); ok {
+		if err := validResponse.VisitRefreshTokenResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// IssueToken operation middleware
+func (sh *strictHandler) IssueToken(w http.ResponseWriter, r *http.Request) {
+	var request IssueTokenRequestObject
+
+	var body IssueTokenJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.IssueToken(ctx, request.(IssueTokenRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "IssueToken")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(IssueTokenResponseObject); ok {
+		if err := validResponse.VisitIssueTokenResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -604,22 +731,26 @@ func (sh *strictHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/8xWUW/bNhD+KwQ3oC+KLTvtMOhpaVoU3rJhaNaXBcHASWeJqXRUj6dkXqH/PpCUJblS",
-	"Wq9zgL1JFHn33ffdfdRHmZqqNgjIViYfJYGtDVrwLy9V9hY+NGDZvaUGGdA/qroudapYG1zeWYNuDf5S",
-	"VV1C2JmBTJ7HcSQrsFblIBP5s7ZWYy4IPjSaIBNbDWUmnqGq4JlsI2nTAirlzn9LsJWJ/GY5YFuGr3b5",
-	"msjQ2w6lbNs2khnYlHTt0MhEbvBelToTGuuGXdwNMhCq8hroHsif/5pyXhyWc20q4MIV9ADI4oEM5sKg",
-	"4AKE9ZlOWlMooYsswBfR9gm8WpcEiuGdBRqJVpOpgVgHQaFSunQPW0OVYpl0K5HkXe2qskwac4fcyeJ2",
-	"Tj7UytoHQ9lBmH4xkpXGK8CcC5l8P4nbRnKvv0xuQpKoB9FHue0Pmj/vIPUyHpI0KS2INNLN69VF0ciQ",
-	"B0V6BUdbH+H3S+h9yiHiHOgrk2s8hRxfYv3zSI8i2HXOFGPoquyCDxlbx+vvzuL12fr8t9U6ieMkjn+X",
-	"0QAtUwxnrL28k2Je7+se4t2ZAn/oXhepqcaxHiVl8+ogyGp0RiOfr+VcA/zSNfaQ+0dToHhlYJbGWZoe",
-	"b8Ne0glYnc0uN9Z13uysfSKidjr32/dTM1XSuQKkDWneXTt3CMCuwVpt8NKY99on085Y0vC6H3dpw64/",
-	"2LwHHPhQtf4JdsGZNG6NB6vZs+f4EBe/bmQk74FsMKzVIl7ErjxTA6pay0SeL+LFue9BLjyiZemGw1No",
-	"wnQ4Ir0LbzKZhNnxTRl4AMsvTbY7wruPc92D2WwP2WZqwC+MbsN1HJ8sty9rxug9JmGbNAVrt43r+gJU",
-	"BtRpyGeDgEOmT/vGxX0e0M6B6Ktaji54f2T1dff8anwx7u9f357CkOhN53T34TtUDReG9N/gw744pti5",
-	"/wA/LE1VKdrtWzl0pfuwbDpHzGGmPd8AXzZEgNz36BM2y2fZcLAJmDTcQzbqnnJ3Oll9EjQsHPOA7M7D",
-	"/1fTzgBlcjOxvpvb9nas+htgkQYlRRPmstPePir+lbZedvtfddcMlT3OLQY3JlK7OQovRKktC7MVAf3p",
-	"JsPVK1RZDoHnPXv4B30i057+5B7l3Ksnd24/H2n4WZoZwX9txicSLvAllEB42Hd32/4TAAD//yp67Sz2",
-	"DQAA",
+	"H4sIAAAAAAAC/8xYbW/bNhD+KwQ3oBugxLLTDps+LUm7zkX2grxgwIJ8YKSzxVQiFfKU1Av83wceZUm2",
+	"6cRNnaLfJIo83j3PPXdnP/BUl5VWoNDy5IEbsJVWFujlSGSncFuDRfeWaoWg6FFUVSFTgVKrwY3Vyq3B",
+	"J1FWBfidGfDkdRxHvARrxRR4wv+Q1ko1ZQZua2kgYxMJRcZeKVHCKz6PuE1zKIU7/72BCU/4d4POt4H/",
+	"agfvjNHmtPGSz+fziGdgUyMr5w1P+FjdiUJmTKqqRmd3rBCMEsUZmDswdP454bxZDudMl4C5C+geFLJ7",
+	"o9WUacUwB2bppp3G5ENoLDOgIObtBcTWsQGBcGHB9EirjK7AoPSEQilk4R4m2pQCedKsRBxnlYvKopFq",
+	"6jx3tLidax8qYe29NtmSmXYx4qVUJ6CmmPPk5zW784gv+OfJpb8kap1orVy1B/X1DaRE4zJIa6F5knq8",
+	"EV+NFakQpp6RlsHe1g34PuU9XdlZDDl9oqdSbaQjgzuZwvitf+4TfqHkbQ1MZqBQTiQYNtGGcistpMs3",
+	"f5T9UFunJPdNfwTFSqHEFEpQ+GOI1M/g/ymaH4dmjdGoCzaE0ylMDNj8W0FqJZpHXT935jbnpUhTsJY2",
+	"rTv/4Z9z5jd4r4KcfaqkATsOHD/sHWW0j2oYQ1kCk4pZSLXKrFPYItV/CavCePw3uNmws9lH+nBOq31Z",
+	"HYEw8LSO+hCtuNIPPwS+q3brmPtKmB3isjujePTTXjzaGx2cD0dJHCdx/C+PuuzOBMKewy4U4ruFdDp7",
+	"NzpXvzav+6ku+7Y26srncGtk2DsjFR6MeIieP5ti3N39QeeKvdUQBDcI0+YUbavCmrMyCy7X1lXLYH9Y",
+	"oVY65bfbFwVonUnXySCtjcTZmetozfxB+XNYu17ywK/p7bcFWroSt7WzSS3QGbteSbccsfLdVKqJJmcl",
+	"EnoOD3b495hH/A6M9Vk+3I/3YxeerkCJSvKEH+zH+wdUxjAnjwZNdhKI2lcqByXpbpx1WumymSrakc5m",
+	"Wwwd240LK8Vyvgw6mhpooTfIjeJ4Z7cv17vAsEIbLGuQgozZmgQ+qYtixiOeg8jAkF9ngHvHWn+UECjs",
+	"ldNjxn5HrP5SxYyltNHy/lS1mn3Om9fx8Hnj6rA/3y3GSG18ZYVsEVFTBnc/sT521RvPYOielulBaNLt",
+	"S4snl8uiuryaX0Xc1mUpzKxX6JueJNSKJ5bMDXDRJsISGFtbw0sKYGmq+kbTXzoQnpv7qzlPc8tmUp5W",
+	"xBbJ0/uxt3MRUdl3+d3Og7tXT2qAZkBR2C8XTKsIyuWn9FA3U8gUAmp4D3hcGwMKaVh5wdRc6vIBpKjr",
+	"GUAj4W41NXdGOV2iNDJRY+74SF0V3yHfF8pZ1kb+581+ncr4HpClnkZGdLfE243Mn0hLnNsvJV0ilHYb",
+	"9nk3/AljxCyE3yErpEWmJ8x7vzutuHiZKIrOcLg/dH9UvFB/WP8nZKsmMdypEjcqMPW/TgL6++wqvSPi",
+	"PF5MMAX3i+yez/8PAAD//+Xv2lobFAAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

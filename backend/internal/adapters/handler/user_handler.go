@@ -18,7 +18,7 @@ func NewUserHandler(service *services.UserService) *UserHandler {
 }
 
 func (h *UserHandler) ListUsers(ctx context.Context, request oapi.ListUsersRequestObject) (oapi.ListUsersResponseObject, error) {
-	users, err := h.userService.ListUsers(ctx)
+	users, err := h.userService.GetUsers(ctx)
 	if err != nil {
 		return oapi.ListUsers500JSONResponse{
 			InternalServerErrorJSONResponse: oapi.InternalServerErrorJSONResponse{
@@ -63,7 +63,7 @@ func (h *UserHandler) CreateUser(ctx context.Context, request oapi.CreateUserReq
 }
 
 func (s *UserHandler) GetCurrentUser(ctx context.Context, request oapi.GetCurrentUserRequestObject) (oapi.GetCurrentUserResponseObject, error) {
-	session, ok := middleware.GetSession(ctx)
+	session, ok := middleware.GetAccessSession(ctx)
 
 	if !ok {
 		return &oapi.GetCurrentUser500JSONResponse{
@@ -79,9 +79,19 @@ func (s *UserHandler) GetCurrentUser(ctx context.Context, request oapi.GetCurren
 			Message: "Unauthorized",
 		}, nil
 	}
+	user, err := s.userService.GetUserByID(ctx, session.UserID)
+	if err != nil {
+		return &oapi.GetCurrentUser500JSONResponse{
+			InternalServerErrorJSONResponse: oapi.InternalServerErrorJSONResponse{
+				Code:    500,
+				Message: "Internal Server Error",
+			},
+		}, nil
+	}
+
 	return &oapi.GetCurrentUser200JSONResponse{
-		Email:    session.User.Email,
-		Id:       strconv.FormatInt(int64(session.User.ID), 10),
-		Username: session.User.Name,
+		Email:    user.Email,
+		Id:       strconv.FormatInt(int64(user.ID), 10),
+		Username: user.Name,
 	}, nil
 }

@@ -2,92 +2,256 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log"
 	"main/internal/core/domain"
-	"strconv"
+	"main/internal/utils"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
 )
 
+const (
+	ACCESS_TOKEN_EXPIRATION  = 15 * time.Minute
+	REFRESH_TOKEN_EXPIRATION = 7 * 24 * time.Hour
+)
+
 type SessionRepositoryInMemory struct {
-	mu               sync.RWMutex
-	sessionsByToken  map[string]domain.Session
-	sessionsByUserID map[string]domain.Session
+	mu                        sync.RWMutex
+	accessSessionsByToken     map[string]domain.AccessSession
+	refreshSessionsByToken    map[string]domain.RefreshSession
+	accessSessionsByDeviceID  map[string]domain.AccessSession
+	refreshSessionsByDeviceID map[string]domain.RefreshSession
 }
 
 func NewSessionRepositoryInMemory() *SessionRepositoryInMemory {
 	return &SessionRepositoryInMemory{
-		sessionsByToken:  make(map[string]domain.Session),
-		sessionsByUserID: make(map[string]domain.Session),
+		accessSessionsByToken:     make(map[string]domain.AccessSession),
+		refreshSessionsByToken:    make(map[string]domain.RefreshSession),
+		accessSessionsByDeviceID:  make(map[string]domain.AccessSession),
+		refreshSessionsByDeviceID: make(map[string]domain.RefreshSession),
 	}
 }
 
-func (r *SessionRepositoryInMemory) CreateSession(
-	ctx context.Context,
-	user *domain.User,
-	tokenHash string,
-	expiresAt time.Time,
-	userAgent,
-	ipAddress string,
-) (*domain.Session, error) {
+func (r *SessionRepositoryInMemory) deleteFromAccessSessionsByToken(token string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-
-	r.cleanupExpiredLocked()
-
-	if _, exists := r.sessionsByToken[tokenHash]; exists {
-		return nil, fmt.Errorf("session with this token already exists")
+	session, exist := r.accessSessionsByToken[token]
+	if exist {
+		delete(r.accessSessionsByDeviceID, session.DeviceID)
+		delete(r.accessSessionsByToken, token)
 	}
-
-	session := domain.Session{
-		ID: uuid.NewString(),
-		User: domain.SessionUser{
-			ID:    user.ID,
-			Name:  user.Name,
-			Email: user.Email,
-		},
-		TokenHash: tokenHash,
-		CreatedAt: time.Now(),
-		ExpiresAt: expiresAt,
-		UserAgent: userAgent,
-		IpAddress: ipAddress,
-	}
-
-	r.sessionsByToken[tokenHash] = session
-	r.sessionsByUserID[strconv.FormatInt(int64(session.User.ID), 10)] = session
-
-	return &session, nil
 }
 
-func (r *SessionRepositoryInMemory) GetSessionByToken(
-	ctx context.Context,
-	token string,
-) (*domain.Session, error) {
+func (r *SessionRepositoryInMemory) deleteFromRefreshSessionsByToken(token string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	session, exist := r.refreshSessionsByToken[token]
+	if exist {
+		delete(r.refreshSessionsByDeviceID, session.DeviceID)
+		delete(r.refreshSessionsByToken, token)
+	}
+}
 
+func (r *SessionRepositoryInMemory) deleteFromAccessSessionsByDeviceID(deviceID string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	session, exist := r.accessSessionsByDeviceID[deviceID]
+	if exist {
+		delete(r.accessSessionsByDeviceID, deviceID)
+		delete(r.accessSessionsByToken, session.TokenHash)
+	}
+}
+
+func (r *SessionRepositoryInMemory) deleteFromRefreshSessionsByDeviceID(deviceID string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	session, exist := r.refreshSessionsByDeviceID[deviceID]
+	if exist {
+		delete(r.refreshSessionsByDeviceID, deviceID)
+		delete(r.refreshSessionsByToken, session.TokenHash)
+	}
+}
+
+func (r *SessionRepositoryInMemory) addToAccessSessions(token string, session domain.AccessSession) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.accessSessionsByToken[token] = session
+	r.accessSessionsByDeviceID[session.DeviceID] = session
+}
+
+func (r *SessionRepositoryInMemory) addToRefreshSessions(token string, session domain.RefreshSession) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.refreshSessionsByToken[token] = session
+	r.refreshSessionsByDeviceID[session.DeviceID] = session
+}
+
+func (r *SessionRepositoryInMemory) getFromAccessSessions(token string) (domain.AccessSession, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	session, exists := r.accessSessionsByToken[token]
+	return session, exists
+}
 
-	session, exists := r.sessionsByToken[token]
+func (r *SessionRepositoryInMemory) getFromRefreshSessions(token string) (domain.RefreshSession, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	session, exists := r.refreshSessionsByToken[token]
+	return session, exists
+}
+
+func (r *SessionRepositoryInMemory) CreateAccessAndRefreshSessions(
+	ctx context.Context,
+	user *domain.User,
+	deviceID string,
+) (*domain.AccessSessionLight, *domain.RefreshSessionLight, error) {
+	accessSession, err := r.NewAccessToken(ctx, user.ID, deviceID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	refreshSession, err := r.NewRefreshToken(ctx, user.ID, deviceID)
+	if err != nil {
+		return nil, nil, err
+	}
+	r.LogContents()
+	return accessSession,
+		refreshSession,
+		nil
+}
+
+func (r *SessionRepositoryInMemory) RefreshToken(ctx context.Context, token, deviceID string) (*domain.AccessSessionLight, *domain.RefreshSessionLight, error) {
+	// 1 validate refresh token exists
+	hashedToken := utils.HashToken(token)
+	refreshSession, ok := r.getFromRefreshSessions(hashedToken)
+	if !ok {
+		return nil, nil, errors.New("invalid or expired refresh token")
+	}
+
+	// 2 Generate new access token and rotate refresh token
+	accessSession, err := r.NewAccessToken(ctx, refreshSession.UserID, deviceID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	newRefreshSession, err := r.NewRefreshToken(ctx, refreshSession.UserID, deviceID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	r.LogContents()
+	return accessSession, newRefreshSession, nil
+}
+
+func (r *SessionRepositoryInMemory) GetAccessSessionByToken(
+	ctx context.Context,
+	token string,
+) (*domain.AccessSession, error) {
+	hashedToken := utils.HashToken(token)
+
+	session, exists := r.getFromAccessSessions(hashedToken)
 	if !exists {
 		return nil, fmt.Errorf("session not found")
 	}
 
 	if time.Now().After(session.ExpiresAt) {
-		delete(r.sessionsByToken, token)
-		delete(r.sessionsByUserID, strconv.FormatInt(int64(session.User.ID), 10))
+		r.deleteFromAccessSessionsByToken(hashedToken)
 		return nil, fmt.Errorf("session expired")
 	}
 
 	return &session, nil
 }
 
-func (r *SessionRepositoryInMemory) cleanupExpiredLocked() {
-	now := time.Now()
-	for token, session := range r.sessionsByToken {
-		if now.After(session.ExpiresAt) {
-			delete(r.sessionsByToken, token)
-		}
+func (r *SessionRepositoryInMemory) GetRefreshSessionByToken(
+	ctx context.Context,
+	token string,
+) (*domain.RefreshSession, error) {
+	hashedToken := utils.HashToken(token)
+
+	session, exists := r.getFromRefreshSessions(hashedToken)
+	if !exists {
+		return nil, fmt.Errorf("session not found")
 	}
+
+	if time.Now().After(session.ExpiresAt) {
+		r.deleteFromRefreshSessionsByToken(hashedToken)
+		return nil, fmt.Errorf("session expired")
+	}
+
+	return &session, nil
+}
+
+func (r *SessionRepositoryInMemory) NewAccessToken(
+	ctx context.Context,
+	userID int32,
+	deviceID string,
+) (*domain.AccessSessionLight, error) {
+	token, err := utils.GenerateToken()
+	if err != nil {
+		return nil, err
+	}
+
+	tokenHash := utils.HashToken(token)
+	if _, exists := r.getFromAccessSessions(tokenHash); exists {
+		return nil, fmt.Errorf("session with this token already exists")
+	}
+
+	session := domain.AccessSession{
+		ID:        uuid.NewString(),
+		UserID:    userID,
+		TokenHash: tokenHash,
+		ExpiresAt: time.Now().Add(ACCESS_TOKEN_EXPIRATION),
+		CreatedAt: time.Now(),
+		DeviceID:  deviceID,
+	}
+
+	r.deleteFromAccessSessionsByDeviceID(deviceID)
+	r.addToAccessSessions(tokenHash, session)
+	return &domain.AccessSessionLight{Token: token, ExpiresAt: session.ExpiresAt}, nil
+}
+
+func (r *SessionRepositoryInMemory) NewRefreshToken(
+	ctx context.Context,
+	userID int32,
+	deviceID string,
+) (*domain.RefreshSessionLight, error) {
+	refreshToken, err := utils.GenerateToken()
+	if err != nil {
+		return nil, err
+	}
+
+	refreshTokenHash := utils.HashToken(refreshToken)
+	if _, exists := r.getFromRefreshSessions(refreshTokenHash); exists {
+		return nil, fmt.Errorf("refresh session with this token already exists")
+	}
+
+	refreshSession := domain.RefreshSession{
+		ID:        uuid.NewString(),
+		UserID:    userID,
+		TokenHash: refreshTokenHash,
+		ExpiresAt: time.Now().Add(REFRESH_TOKEN_EXPIRATION),
+		CreatedAt: time.Now(),
+		DeviceID:  deviceID,
+	}
+
+	r.deleteFromRefreshSessionsByDeviceID(deviceID)
+	r.addToRefreshSessions(refreshTokenHash, refreshSession)
+	return &domain.RefreshSessionLight{Token: refreshToken, ExpiresAt: refreshSession.ExpiresAt}, nil
+}
+
+func (r *SessionRepositoryInMemory) LogContents() error {
+	log.Println("Access Sessions:")
+	for token, session := range r.accessSessionsByToken {
+		log.Printf("Token: %s, Session: %+s\n", token, session.DeviceID)
+	}
+
+	log.Println("Refresh Sessions:")
+	for token, session := range r.refreshSessionsByToken {
+		log.Printf("Token: %s, Session: %+s\n", token, session.DeviceID)
+	}
+
+	return nil
 }

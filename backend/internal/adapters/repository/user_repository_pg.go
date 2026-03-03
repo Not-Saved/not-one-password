@@ -18,8 +18,8 @@ func NewUserRepositoryPg(dbConn *sql.DB) *UserRepositoryPg {
 	}
 }
 
-func (r *UserRepositoryPg) ListUsers(ctx context.Context) ([]domain.User, error) {
-	dbUsers, err := r.queries.ListUsers(ctx)
+func (r *UserRepositoryPg) GetUsers(ctx context.Context) ([]domain.User, error) {
+	dbUsers, err := r.queries.GetUsers(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -33,6 +33,19 @@ func (r *UserRepositoryPg) ListUsers(ctx context.Context) ([]domain.User, error)
 
 func (r *UserRepositoryPg) GetUserByEmail(ctx context.Context, email string) (*domain.User, error) {
 	dbUser, err := r.queries.GetUserByEmail(ctx, email)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	u := toDomainUser(dbUser)
+	return u, nil
+}
+
+func (r *UserRepositoryPg) GetUserByID(ctx context.Context, id int32) (*domain.User, error) {
+	dbUser, err := r.queries.GetUserByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil

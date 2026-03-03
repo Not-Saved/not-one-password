@@ -3,23 +3,28 @@ package ports
 import (
 	"context"
 	"main/internal/core/domain"
-	"time"
 )
 
 type UserRepository interface {
-	ListUsers(ctx context.Context) ([]domain.User, error)
+	GetUsers(ctx context.Context) ([]domain.User, error)
 	GetUserByEmail(ctx context.Context, email string) (*domain.User, error)
+	GetUserByID(ctx context.Context, id int32) (*domain.User, error)
 	CreateUser(ctx context.Context, name, email, passwordHash string) (*domain.User, error)
 }
 
 type SessionRepository interface {
-	CreateSession(
+	CreateAccessAndRefreshSessions(
 		ctx context.Context,
 		user *domain.User,
-		tokenHash string,
-		expiresAt time.Time,
-		userAgent string,
-		ipAddress string,
-	) (*domain.Session, error)
-	GetSessionByToken(ctx context.Context, token string) (*domain.Session, error)
+		deviceID string,
+	) (*domain.AccessSessionLight, *domain.RefreshSessionLight, error)
+
+	RefreshToken(
+		ctx context.Context,
+		refreshToken string,
+		deviceID string,
+	) (*domain.AccessSessionLight, *domain.RefreshSessionLight, error)
+
+	GetAccessSessionByToken(ctx context.Context, token string) (*domain.AccessSession, error)
+	GetRefreshSessionByToken(ctx context.Context, token string) (*domain.RefreshSession, error)
 }

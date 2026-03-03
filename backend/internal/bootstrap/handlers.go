@@ -12,6 +12,6 @@ type Handlers struct {
 func NewHandlers(s *Services) *Handlers {
 	return &Handlers{
 		UserHandler: handler.NewUserHandler(s.UserService),
-		AuthHandler: handler.NewAuthHandler(s.UserService),
+		AuthHandler: handler.NewAuthHandler(s.UserService, s.AuthService),
 	}
 }

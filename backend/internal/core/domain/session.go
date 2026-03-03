@@ -2,24 +2,32 @@ package domain
 
 import "time"
 
-type Session struct {
+type AccessSession struct {
 	ID        string
-	User      SessionUser
+	UserID    int32
 	TokenHash string
 	CreatedAt time.Time
 	ExpiresAt time.Time
 	RevokedAt time.Time
-	UserAgent string
-	IpAddress string
+	DeviceID  string
 }
 
-type SessionUser struct {
-	ID    int32
-	Name  string
-	Email string
+type RefreshSession struct {
+	ID        string
+	UserID    int32
+	TokenHash string
+	CreatedAt time.Time
+	ExpiresAt time.Time
+	RevokedAt time.Time
+	DeviceID  string
 }
 
-type SessionLight struct {
+type AccessSessionLight struct {
+	Token     string
+	ExpiresAt time.Time
+}
+
+type RefreshSessionLight struct {
 	Token     string
 	ExpiresAt time.Time
 }

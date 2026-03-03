@@ -1,9 +1,9 @@
 package server
 
 import (
-	"context"
 	"encoding/json"
 	"log"
+	"main/internal/adapters/middleware"
 	"main/internal/bootstrap"
 	"main/internal/oapi"
 	"net/http"
@@ -73,17 +73,9 @@ func (s *Server) RegisterSwaggerRoute() {
 	))
 }
 
-func (s *Server) Start() error {
+func (s *Server) Start(withLogging bool) error {
+	if withLogging {
+		return http.ListenAndServe(":"+s.port, middleware.LoggerMiddleware(s.mux))
+	}
 	return http.ListenAndServe(":"+s.port, s.mux)
-}
-
-func withReqResContext(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-
-		ctx = context.WithValue(ctx, "httpRequest", r)
-		ctx = context.WithValue(ctx, "httpResponseWriter", w)
-
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
 }

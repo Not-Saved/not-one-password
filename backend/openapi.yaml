@@ -38,47 +38,12 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "500":
           $ref: "#/components/responses/InternalServerError"
-  /login:
-    post:
-      summary: User login
-      operationId: loginUser
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/LoginRequest"
-      responses:
-        "200":
-          description: Login successful
-          headers:
-            Set-Cookie:
-              schema:
-                type: string
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/User"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              example:
-                code: 401
-                message: Invalid email or password
-        "500":
-          $ref: "#/components/responses/InternalServerError"
-
   /user:
     get:
       summary: Get current user
       operationId: getCurrentUser
       security:
-        - SessionCookie: []
+        - BearerAuth: []
       responses:
         "200":
           description: User retrieved successfully
@@ -97,13 +62,83 @@ paths:
                 message: User not authenticated
         "500":
           $ref: "#/components/responses/InternalServerError"
+  /token:
+    post:
+      summary: Issue access and refresh tokens
+      operationId: issueToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Tokens issued successfully
+          headers:
+            Set-Cookie:
+              description: HttpOnly cookies for access and refresh tokens
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: 401
+                message: Invalid email or password
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /refresh:
+    post:
+      summary: Refresh access and refresh tokens
+      operationId: refreshToken
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          description: Tokens refreshed successfully
+          headers:
+            Set-Cookie:
+              description: Updated HttpOnly cookies
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "401":
+          description: Invalid or expired refresh token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: 401
+                message: Invalid or expired refresh token
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 components:
   securitySchemes:
-    SessionCookie:
-      type: apiKey
-      in: cookie
-      name: session_token
-
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
   schemas:
     UserResponse:
       type: object
@@ -160,6 +195,7 @@ components:
       required:
         - email
         - password
+        - deviceID
       properties:
         email:
           type: string
@@ -167,6 +203,38 @@ components:
         password:
           type: string
           format: password
+        deviceID:
+          type: string
+          description: Unique identifier for the client device (used for token management)
+    TokenResponse:
+      type: object
+      required:
+        - accessToken
+        - refreshToken
+        - expiresIn
+      properties:
+        accessToken:
+          type: string
+          description: JWT access token
+        refreshToken:
+          type: string
+          description: Refresh token
+        tokenType:
+          type: string
+          example: Bearer
+        expiresIn:
+          type: integer
+          description: Access token expiration time in seconds
+          example: 900
+
+    RefreshRequest:
+      type: object
+      required:
+        - deviceID
+      properties:
+        deviceID:
+          type: string
+          description: Unique identifier for the client device (used for token management)
 
     ErrorResponse:
       type: object

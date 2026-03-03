@@ -28,5 +28,5 @@ func main() {
 	srv.RegisterSwaggerRoute()
 
 	log.Printf("Server running on :%s", cfg.AppPort)
-	log.Fatal(srv.Start())
+	log.Fatal(srv.Start(true))
 }
