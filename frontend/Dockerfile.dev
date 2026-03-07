@@ -2,8 +2,10 @@ FROM oven/bun:latest
 
 WORKDIR /app
 
-COPY package.json bun.lock ./
+COPY package.json bun.lock vite.config.ts ./
 RUN bun install
+
+COPY . .
 
 EXPOSE 5173
 

@@ -1,42 +1,73 @@
-# sv
+# frontend
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+This template should help get you started developing with Vue 3 in Vite.
 
-## Creating a project
+## Recommended IDE Setup
 
-If you're seeing this, you've probably already done this step. Congrats!
+[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
 
-```sh
-# create a new project
-npx sv create my-app
-```
+## Recommended Browser Setup
 
-To recreate this project with the same configuration:
+- Chromium-based browsers (Chrome, Edge, Brave, etc.):
+  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
+  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
+- Firefox:
+  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
+  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
 
-```sh
-# recreate this project
-bun x sv create --template minimal --types ts --add vitest="usages:unit,component" playwright --install bun .
-```
+## Type Support for `.vue` Imports in TS
 
-## Developing
+TypeScript cannot handle type information for `.vue` imports by default, so we replace the `tsc` CLI with `vue-tsc` for type checking. In editors, we need [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) to make the TypeScript language service aware of `.vue` types.
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+## Customize configuration
 
-```sh
-npm run dev
+See [Vite Configuration Reference](https://vite.dev/config/).
 
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
-
-## Building
-
-To create a production version of your app:
+## Project Setup
 
 ```sh
-npm run build
+bun install
 ```
 
-You can preview the production build with `npm run preview`.
+### Compile and Hot-Reload for Development
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+```sh
+bun dev
+```
+
+### Type-Check, Compile and Minify for Production
+
+```sh
+bun run build
+```
+
+### Run Unit Tests with [Vitest](https://vitest.dev/)
+
+```sh
+bun test:unit
+```
+
+### Run End-to-End Tests with [Playwright](https://playwright.dev)
+
+```sh
+# Install browsers for the first run
+npx playwright install
+
+# When testing on CI, must build the project first
+bun run build
+
+# Runs the end-to-end tests
+bun test:e2e
+# Runs the tests only on Chromium
+bun test:e2e --project=chromium
+# Runs the tests of a specific file
+bun test:e2e tests/example.spec.ts
+# Runs the tests in debug mode
+bun test:e2e --debug
+```
+
+### Lint with [ESLint](https://eslint.org/)
+
+```sh
+bun lint
+```
