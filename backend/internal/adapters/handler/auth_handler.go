@@ -46,7 +46,7 @@ func (h *AuthHandler) RefreshToken(ctx context.Context, request oapi.RefreshToke
 		}, nil
 	}
 
-	newAccessSession, newRefreshSession, err := h.authService.RefreshToken(ctx, refreshToken, request.Body.DeviceID)
+	newAccessSession, newRefreshSession, err := h.authService.RefreshToken(ctx, refreshToken)
 	if err != nil {
 		return &oapi.RefreshToken401JSONResponse{
 			Code:    401,

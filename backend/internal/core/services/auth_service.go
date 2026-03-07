@@ -40,8 +40,8 @@ func (s *AuthService) CreateToken(ctx context.Context, email, password, deviceID
 	return user, accessSession, refreshSession, nil
 }
 
-func (s *AuthService) RefreshToken(ctx context.Context, refreshToken, deviceID string) (*domain.AccessSessionLight, *domain.RefreshSessionLight, error) {
-	accessSession, refreshSession, err := s.sessionRepository.RefreshToken(ctx, refreshToken, deviceID)
+func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (*domain.AccessSessionLight, *domain.RefreshSessionLight, error) {
+	accessSession, refreshSession, err := s.sessionRepository.RefreshToken(ctx, refreshToken)
 
 	if err != nil {
 		return nil, nil, err

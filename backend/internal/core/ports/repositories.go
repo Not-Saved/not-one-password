@@ -22,7 +22,6 @@ type SessionRepository interface {
 	RefreshToken(
 		ctx context.Context,
 		refreshToken string,
-		deviceID string,
 	) (*domain.AccessSessionLight, *domain.RefreshSessionLight, error)
 
 	GetAccessSessionByToken(ctx context.Context, token string) (*domain.AccessSession, error)

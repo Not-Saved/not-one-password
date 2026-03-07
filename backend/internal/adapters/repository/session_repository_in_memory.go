@@ -123,7 +123,7 @@ func (r *SessionRepositoryInMemory) CreateAccessAndRefreshSessions(
 		nil
 }
 
-func (r *SessionRepositoryInMemory) RefreshToken(ctx context.Context, token, deviceID string) (*domain.AccessSessionLight, *domain.RefreshSessionLight, error) {
+func (r *SessionRepositoryInMemory) RefreshToken(ctx context.Context, token string) (*domain.AccessSessionLight, *domain.RefreshSessionLight, error) {
 	// 1 validate refresh token exists
 	hashedToken := utils.HashToken(token)
 	refreshSession, ok := r.getFromRefreshSessions(hashedToken)
@@ -132,12 +132,12 @@ func (r *SessionRepositoryInMemory) RefreshToken(ctx context.Context, token, dev
 	}
 
 	// 2 Generate new access token and rotate refresh token
-	accessSession, err := r.NewAccessToken(ctx, refreshSession.UserID, deviceID)
+	accessSession, err := r.NewAccessToken(ctx, refreshSession.UserID, refreshSession.DeviceID)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	newRefreshSession, err := r.NewRefreshToken(ctx, refreshSession.UserID, deviceID)
+	newRefreshSession, err := r.NewRefreshToken(ctx, refreshSession.UserID, refreshSession.DeviceID)
 	if err != nil {
 		return nil, nil, err
 	}
