@@ -13,9 +13,9 @@ type Repositories struct {
 	ports.SessionRepository
 }
 
-func NewRepositories(db *sql.DB, redis *redis.Client) *Repositories {
+func NewRepositories(db *sql.DB, rdb *redis.Client) *Repositories {
 	return &Repositories{
 		UserRepository:    repository.NewUserRepositoryPg(db),
-		SessionRepository: repository.NewSessionRepositoryRedis(redis),
+		SessionRepository: repository.NewSessionRepositoryRedis(rdb),
 	}
 }

@@ -3,170 +3,166 @@ package repository
 import (
 	"context"
 	"fmt"
-	"log"
-	"main/internal/core/domain"
-	"main/internal/utils"
 	"sync"
 	"time"
+
+	"main/internal/core/domain"
+	"main/internal/utils"
 
 	"github.com/google/uuid"
 )
 
+// SessionRepositoryInMemory is a thread-safe in-memory session store
 type SessionRepositoryInMemory struct {
-	mu                     sync.RWMutex
-	accessSessionsByToken  map[string]domain.AccessSession
-	refreshSessionsByToken map[string]domain.RefreshSession
+	mu sync.RWMutex
+
+	// tokenHash -> session
+	accessSessions  map[string]domain.AccessSession
+	refreshSessions map[string]domain.RefreshSession
+
+	// userID+deviceID -> tokenHash
+	userDeviceAccess  map[string]string
+	userDeviceRefresh map[string]string
 }
 
-func NewSessionRepositoryInMemory() *SessionRepositoryInMemory {
+func NewSessionResositoryInMemory() *SessionRepositoryInMemory {
 	return &SessionRepositoryInMemory{
-		accessSessionsByToken:  make(map[string]domain.AccessSession),
-		refreshSessionsByToken: make(map[string]domain.RefreshSession),
+		accessSessions:    make(map[string]domain.AccessSession),
+		refreshSessions:   make(map[string]domain.RefreshSession),
+		userDeviceAccess:  make(map[string]string),
+		userDeviceRefresh: make(map[string]string),
 	}
 }
 
-func (r *SessionRepositoryInMemory) deleteFromAccessSessionsByToken(token string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	delete(r.accessSessionsByToken, token)
+// Helper for user-device key
+func deviceKey(userID, deviceID string) string {
+	return fmt.Sprintf("%s:%s", userID, deviceID)
 }
 
-func (r *SessionRepositoryInMemory) deleteFromRefreshSessionsByToken(token string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	delete(r.refreshSessionsByToken, token)
-}
+// GET SESSIONS
+func (r *SessionRepositoryInMemory) GetAccessSessionByToken(ctx context.Context, token string) (*domain.AccessSession, error) {
+	tokenHash := utils.HashToken(token)
 
-func (r *SessionRepositoryInMemory) addToAccessSessions(token string, session domain.AccessSession) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.accessSessionsByToken[token] = session
-}
-
-func (r *SessionRepositoryInMemory) addToRefreshSessions(token string, session domain.RefreshSession) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.refreshSessionsByToken[token] = session
-}
-
-func (r *SessionRepositoryInMemory) getFromAccessSessions(token string) (domain.AccessSession, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	session, exists := r.accessSessionsByToken[token]
-	return session, exists
-}
 
-func (r *SessionRepositoryInMemory) getFromRefreshSessions(token string) (domain.RefreshSession, bool) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	session, exists := r.refreshSessionsByToken[token]
-	return session, exists
-}
-
-func (r *SessionRepositoryInMemory) GetAccessSessionByToken(
-	ctx context.Context,
-	token string,
-) (*domain.AccessSession, error) {
-	hashedToken := utils.HashToken(token)
-
-	session, exists := r.getFromAccessSessions(hashedToken)
-	if !exists {
-		return nil, fmt.Errorf("session not found")
+	session, ok := r.accessSessions[tokenHash]
+	if !ok || time.Now().After(session.ExpiresAt) {
+		return nil, fmt.Errorf("session not found or expired")
 	}
-
-	if time.Now().After(session.ExpiresAt) {
-		r.deleteFromAccessSessionsByToken(hashedToken)
-		return nil, fmt.Errorf("session expired")
-	}
-
 	return &session, nil
 }
 
-func (r *SessionRepositoryInMemory) GetRefreshSessionByToken(
-	ctx context.Context,
-	token string,
-) (*domain.RefreshSession, error) {
-	hashedToken := utils.HashToken(token)
+func (r *SessionRepositoryInMemory) GetRefreshSessionByToken(ctx context.Context, token string) (*domain.RefreshSession, error) {
+	tokenHash := utils.HashToken(token)
 
-	session, exists := r.getFromRefreshSessions(hashedToken)
-	if !exists {
-		return nil, fmt.Errorf("session not found")
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	session, ok := r.refreshSessions[tokenHash]
+	if !ok || time.Now().After(session.ExpiresAt) {
+		return nil, fmt.Errorf("refresh session not found or expired")
 	}
-
-	if time.Now().After(session.ExpiresAt) {
-		r.deleteFromRefreshSessionsByToken(hashedToken)
-		return nil, fmt.Errorf("session expired")
-	}
-
 	return &session, nil
 }
 
-func (r *SessionRepositoryInMemory) NewAccessToken(
-	ctx context.Context,
-	userID string,
-	deviceID string,
-) (*domain.AccessSessionLight, error) {
+// REVOKE OLD TOKENS
+func (r *SessionRepositoryInMemory) revokeOldAccessToken(ctx context.Context, userID, deviceID string) {
+	key := deviceKey(userID, deviceID)
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if oldHash, ok := r.userDeviceAccess[key]; ok {
+		delete(r.accessSessions, oldHash)
+	}
+}
+
+func (r *SessionRepositoryInMemory) revokeOldRefreshToken(ctx context.Context, userID, deviceID string) {
+	key := deviceKey(userID, deviceID)
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if oldHash, ok := r.userDeviceRefresh[key]; ok {
+		delete(r.refreshSessions, oldHash)
+	}
+}
+
+// CREATE NEW TOKENS
+func (r *SessionRepositoryInMemory) NewAccessToken(ctx context.Context, userID, deviceID string) (*domain.AccessSessionLight, error) {
+	r.revokeOldAccessToken(ctx, userID, deviceID)
+
 	token, tokenHash, err := GenerateTokenForSession()
 	if err != nil {
 		return nil, err
-	}
-
-	if _, exists := r.getFromAccessSessions(tokenHash); exists {
-		return nil, fmt.Errorf("session with this token already exists")
 	}
 
 	session := domain.AccessSession{
 		ID:        uuid.NewString(),
 		UserID:    userID,
 		TokenHash: tokenHash,
-		ExpiresAt: time.Now().Add(ACCESS_TOKEN_EXPIRATION),
-		CreatedAt: time.Now(),
 		DeviceID:  deviceID,
+		CreatedAt: time.Now(),
+		ExpiresAt: time.Now().Add(ACCESS_TOKEN_EXPIRATION),
 	}
 
-	r.addToAccessSessions(tokenHash, session)
-	return &domain.AccessSessionLight{Token: token, ExpiresAt: session.ExpiresAt}, nil
+	key := deviceKey(userID, deviceID)
+
+	r.mu.Lock()
+	r.accessSessions[tokenHash] = session
+	r.userDeviceAccess[key] = tokenHash
+	r.mu.Unlock()
+
+	return &domain.AccessSessionLight{
+		Token:     token,
+		ExpiresAt: session.ExpiresAt,
+	}, nil
 }
 
-func (r *SessionRepositoryInMemory) NewRefreshToken(
-	ctx context.Context,
-	userID string,
-	deviceID string,
-) (*domain.RefreshSessionLight, error) {
+func (r *SessionRepositoryInMemory) NewRefreshToken(ctx context.Context, userID, deviceID string) (*domain.RefreshSessionLight, error) {
+	r.revokeOldRefreshToken(ctx, userID, deviceID)
 
 	token, tokenHash, err := GenerateTokenForSession()
 	if err != nil {
 		return nil, err
 	}
 
-	if _, exists := r.getFromRefreshSessions(tokenHash); exists {
-		return nil, fmt.Errorf("refresh session with this token already exists")
-	}
-
-	refreshSession := domain.RefreshSession{
+	session := domain.RefreshSession{
 		ID:        uuid.NewString(),
 		UserID:    userID,
 		TokenHash: tokenHash,
-		ExpiresAt: time.Now().Add(REFRESH_TOKEN_EXPIRATION),
-		CreatedAt: time.Now(),
 		DeviceID:  deviceID,
+		CreatedAt: time.Now(),
+		ExpiresAt: time.Now().Add(REFRESH_TOKEN_EXPIRATION),
 	}
 
-	r.addToRefreshSessions(tokenHash, refreshSession)
-	r.LogContents()
-	return &domain.RefreshSessionLight{Token: token, ExpiresAt: refreshSession.ExpiresAt}, nil
+	key := deviceKey(userID, deviceID)
+
+	r.mu.Lock()
+	r.refreshSessions[tokenHash] = session
+	r.userDeviceRefresh[key] = tokenHash
+	r.mu.Unlock()
+
+	return &domain.RefreshSessionLight{
+		Token:     token,
+		ExpiresAt: session.ExpiresAt,
+	}, nil
 }
 
-func (r *SessionRepositoryInMemory) LogContents() error {
-	log.Println("Access Sessions:")
-	for token, session := range r.accessSessionsByToken {
-		log.Printf("Token: %s, Session: %+s\n", token, session.UserID)
-	}
+// DELETE SESSIONS
+func (r *SessionRepositoryInMemory) DeleteAccessSession(ctx context.Context, tokenHash string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
-	log.Println("Refresh Sessions:")
-	for token, session := range r.refreshSessionsByToken {
-		log.Printf("Token: %s, Session: %+s\n", token, session.UserID)
-	}
+	delete(r.accessSessions, tokenHash)
+	return nil
+}
 
+func (r *SessionRepositoryInMemory) DeleteRefreshSession(ctx context.Context, tokenHash string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	delete(r.refreshSessions, tokenHash)
 	return nil
 }
