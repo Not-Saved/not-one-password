@@ -12,11 +12,6 @@ import (
 	"github.com/google/uuid"
 )
 
-const (
-	ACCESS_TOKEN_EXPIRATION  = 15 * time.Minute
-	REFRESH_TOKEN_EXPIRATION = 7 * 24 * time.Hour
-)
-
 type SessionRepositoryInMemory struct {
 	mu                     sync.RWMutex
 	accessSessionsByToken  map[string]domain.AccessSession
@@ -111,7 +106,7 @@ func (r *SessionRepositoryInMemory) NewAccessToken(
 	userID string,
 	deviceID string,
 ) (*domain.AccessSessionLight, error) {
-	token, tokenHash, err := GenerateTokenForSession(userID, deviceID)
+	token, tokenHash, err := GenerateTokenForSession()
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +134,7 @@ func (r *SessionRepositoryInMemory) NewRefreshToken(
 	deviceID string,
 ) (*domain.RefreshSessionLight, error) {
 
-	token, tokenHash, err := GenerateTokenForSession(userID, deviceID)
+	token, tokenHash, err := GenerateTokenForSession()
 	if err != nil {
 		return nil, err
 	}
@@ -174,18 +169,4 @@ func (r *SessionRepositoryInMemory) LogContents() error {
 	}
 
 	return nil
-}
-
-func GenerateTokenForSession(userID string, deviceID string) (string, string, error) {
-	token, err := utils.GenerateRandomString(8)
-	if err != nil {
-		return "", "", err
-	}
-
-	//This ensures that each token is unique for user and device
-	readableToken := fmt.Sprintf("usr_%s_dev_%s_%s", userID, deviceID, token)
-
-	tokenHash := utils.HashToken(readableToken)
-
-	return readableToken, tokenHash, nil
 }

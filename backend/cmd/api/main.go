@@ -5,6 +5,7 @@ import (
 	"main/internal/bootstrap"
 	"main/internal/config"
 	"main/internal/db"
+	"main/internal/redis"
 	"main/internal/server"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -15,8 +16,9 @@ func main() {
 
 	dbConn := db.NewDbConnection(cfg.DB.ConnString())
 	defer dbConn.Close()
+	redisConn := redis.NewRedisConnection(cfg.Redis)
 
-	repos := bootstrap.NewRepositories(dbConn)
+	repos := bootstrap.NewRepositories(dbConn, redisConn)
 	services := bootstrap.NewServices(repos)
 	handlers := bootstrap.NewHandlers(services)
 	middlewares := bootstrap.NewMiddlewares(services)
