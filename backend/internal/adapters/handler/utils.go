@@ -7,16 +7,14 @@ import (
 	"github.com/oapi-codegen/runtime/types"
 )
 
-func mapToAPIUser(u domain.User) oapi.User {
-	id := u.ID
+func mapToAPIUser(u domain.User) oapi.UserResponse {
+	id := u.PublicID
 	name := u.Name
 	email := types.Email(u.Email)
-	createdAt := u.CreatedAt
 
-	return oapi.User{
-		ID:        &id,
-		Name:      &name,
-		Email:     &email,
-		CreatedAt: &createdAt,
+	return oapi.UserResponse{
+		Id:    id,
+		Name:  &name,
+		Email: email,
 	}
 }

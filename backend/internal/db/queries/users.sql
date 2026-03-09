@@ -3,9 +3,9 @@ INSERT INTO users (name, email, password_hash)
 VALUES ($1, $2, $3)
 RETURNING *;
 
--- name: GetUserByID :one
+-- name: GetUserByPublicID :one
 SELECT * FROM users
-WHERE id = $1;
+WHERE public_id = $1;
 
 -- name: GetUserByEmail :one
 SELECT * FROM users

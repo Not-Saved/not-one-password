@@ -18,74 +18,40 @@ const (
 )
 
 type SessionRepositoryInMemory struct {
-	mu                        sync.RWMutex
-	accessSessionsByToken     map[string]domain.AccessSession
-	refreshSessionsByToken    map[string]domain.RefreshSession
-	accessSessionsByDeviceID  map[string]domain.AccessSession
-	refreshSessionsByDeviceID map[string]domain.RefreshSession
+	mu                     sync.RWMutex
+	accessSessionsByToken  map[string]domain.AccessSession
+	refreshSessionsByToken map[string]domain.RefreshSession
 }
 
 func NewSessionRepositoryInMemory() *SessionRepositoryInMemory {
 	return &SessionRepositoryInMemory{
-		accessSessionsByToken:     make(map[string]domain.AccessSession),
-		refreshSessionsByToken:    make(map[string]domain.RefreshSession),
-		accessSessionsByDeviceID:  make(map[string]domain.AccessSession),
-		refreshSessionsByDeviceID: make(map[string]domain.RefreshSession),
+		accessSessionsByToken:  make(map[string]domain.AccessSession),
+		refreshSessionsByToken: make(map[string]domain.RefreshSession),
 	}
 }
 
 func (r *SessionRepositoryInMemory) deleteFromAccessSessionsByToken(token string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	session, exist := r.accessSessionsByToken[token]
-	if exist {
-		delete(r.accessSessionsByDeviceID, session.DeviceID)
-		delete(r.accessSessionsByToken, token)
-	}
+	delete(r.accessSessionsByToken, token)
 }
 
 func (r *SessionRepositoryInMemory) deleteFromRefreshSessionsByToken(token string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	session, exist := r.refreshSessionsByToken[token]
-	if exist {
-		delete(r.refreshSessionsByDeviceID, session.DeviceID)
-		delete(r.refreshSessionsByToken, token)
-	}
-}
-
-func (r *SessionRepositoryInMemory) deleteFromAccessSessionsByDeviceID(deviceID string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	session, exist := r.accessSessionsByDeviceID[deviceID]
-	if exist {
-		delete(r.accessSessionsByDeviceID, deviceID)
-		delete(r.accessSessionsByToken, session.TokenHash)
-	}
-}
-
-func (r *SessionRepositoryInMemory) deleteFromRefreshSessionsByDeviceID(deviceID string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	session, exist := r.refreshSessionsByDeviceID[deviceID]
-	if exist {
-		delete(r.refreshSessionsByDeviceID, deviceID)
-		delete(r.refreshSessionsByToken, session.TokenHash)
-	}
+	delete(r.refreshSessionsByToken, token)
 }
 
 func (r *SessionRepositoryInMemory) addToAccessSessions(token string, session domain.AccessSession) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.accessSessionsByToken[token] = session
-	r.accessSessionsByDeviceID[session.DeviceID] = session
 }
 
 func (r *SessionRepositoryInMemory) addToRefreshSessions(token string, session domain.RefreshSession) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.refreshSessionsByToken[token] = session
-	r.refreshSessionsByDeviceID[session.DeviceID] = session
 }
 
 func (r *SessionRepositoryInMemory) getFromAccessSessions(token string) (domain.AccessSession, bool) {
@@ -142,15 +108,14 @@ func (r *SessionRepositoryInMemory) GetRefreshSessionByToken(
 
 func (r *SessionRepositoryInMemory) NewAccessToken(
 	ctx context.Context,
-	userID int32,
+	userID string,
 	deviceID string,
 ) (*domain.AccessSessionLight, error) {
-	token, err := utils.GenerateToken()
+	token, tokenHash, err := GenerateTokenForSession(userID, deviceID)
 	if err != nil {
 		return nil, err
 	}
 
-	tokenHash := utils.HashToken(token)
 	if _, exists := r.getFromAccessSessions(tokenHash); exists {
 		return nil, fmt.Errorf("session with this token already exists")
 	}
@@ -164,50 +129,63 @@ func (r *SessionRepositoryInMemory) NewAccessToken(
 		DeviceID:  deviceID,
 	}
 
-	r.deleteFromAccessSessionsByDeviceID(deviceID)
 	r.addToAccessSessions(tokenHash, session)
 	return &domain.AccessSessionLight{Token: token, ExpiresAt: session.ExpiresAt}, nil
 }
 
 func (r *SessionRepositoryInMemory) NewRefreshToken(
 	ctx context.Context,
-	userID int32,
+	userID string,
 	deviceID string,
 ) (*domain.RefreshSessionLight, error) {
-	refreshToken, err := utils.GenerateToken()
+
+	token, tokenHash, err := GenerateTokenForSession(userID, deviceID)
 	if err != nil {
 		return nil, err
 	}
 
-	refreshTokenHash := utils.HashToken(refreshToken)
-	if _, exists := r.getFromRefreshSessions(refreshTokenHash); exists {
+	if _, exists := r.getFromRefreshSessions(tokenHash); exists {
 		return nil, fmt.Errorf("refresh session with this token already exists")
 	}
 
 	refreshSession := domain.RefreshSession{
 		ID:        uuid.NewString(),
 		UserID:    userID,
-		TokenHash: refreshTokenHash,
+		TokenHash: tokenHash,
 		ExpiresAt: time.Now().Add(REFRESH_TOKEN_EXPIRATION),
 		CreatedAt: time.Now(),
 		DeviceID:  deviceID,
 	}
 
-	r.deleteFromRefreshSessionsByDeviceID(deviceID)
-	r.addToRefreshSessions(refreshTokenHash, refreshSession)
-	return &domain.RefreshSessionLight{Token: refreshToken, ExpiresAt: refreshSession.ExpiresAt}, nil
+	r.addToRefreshSessions(tokenHash, refreshSession)
+	r.LogContents()
+	return &domain.RefreshSessionLight{Token: token, ExpiresAt: refreshSession.ExpiresAt}, nil
 }
 
 func (r *SessionRepositoryInMemory) LogContents() error {
 	log.Println("Access Sessions:")
 	for token, session := range r.accessSessionsByToken {
-		log.Printf("Token: %s, Session: %+s\n", token, session.DeviceID)
+		log.Printf("Token: %s, Session: %+s\n", token, session.UserID)
 	}
 
 	log.Println("Refresh Sessions:")
 	for token, session := range r.refreshSessionsByToken {
-		log.Printf("Token: %s, Session: %+s\n", token, session.DeviceID)
+		log.Printf("Token: %s, Session: %+s\n", token, session.UserID)
 	}
 
 	return nil
+}
+
+func GenerateTokenForSession(userID string, deviceID string) (string, string, error) {
+	token, err := utils.GenerateRandomString(8)
+	if err != nil {
+		return "", "", err
+	}
+
+	//This ensures that each token is unique for user and device
+	readableToken := fmt.Sprintf("usr_%s_dev_%s_%s", userID, deviceID, token)
+
+	tokenHash := utils.HashToken(readableToken)
+
+	return readableToken, tokenHash, nil
 }

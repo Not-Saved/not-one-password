@@ -8,13 +8,13 @@ import (
 type SessionRepository interface {
 	NewAccessToken(
 		ctx context.Context,
-		userID int32,
+		userID,
 		deviceID string,
 	) (*domain.AccessSessionLight, error)
 
 	NewRefreshToken(
 		ctx context.Context,
-		userID int32,
+		userID,
 		deviceID string,
 	) (*domain.RefreshSessionLight, error)
 

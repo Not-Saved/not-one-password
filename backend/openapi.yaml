@@ -18,7 +18,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/User"
+                  $ref: "#/components/schemas/UserResponse"
         "500":
           $ref: "#/components/responses/InternalServerError"
   /user:
@@ -61,7 +61,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/User"
+                $ref: "#/components/schemas/UserResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "500":
@@ -145,36 +145,20 @@ components:
   schemas:
     UserResponse:
       type: object
-      properties:
-        id:
-          type: string
-        username:
-          type: string
-        email:
-          type: string
       required:
         - id
         - username
         - email
-
-    User:
-      type: object
       properties:
-        ID:
-          type: integer
-          format: int32
-          example: 1
-        Name:
+        id:
+          type: string
+          format: uuid
+        name:
           type: string
           example: John Doe
-        Email:
+        email:
           type: string
           format: email
-          example: john@example.com
-        CreatedAt:
-          type: string
-          format: date-time
-          example: "2026-02-23T12:00:00Z"
 
     CreateUserRequest:
       type: object

@@ -21,8 +21,16 @@ func (s *UserService) GetUsers(ctx context.Context) ([]domain.User, error) {
 	return s.userRepository.GetUsers(ctx)
 }
 
-func (s *UserService) GetUserByID(ctx context.Context, id int32) (*domain.User, error) {
-	return s.userRepository.GetUserByID(ctx, id)
+func (s *UserService) GetUserByPublicID(ctx context.Context, id string) (*domain.User, error) {
+	user, err := s.userRepository.GetUserByPublicID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
+		return nil, fmt.Errorf("User doesn't exist")
+	}
+
+	return user, nil
 }
 
 func (s *UserService) CreateUser(ctx context.Context, name, email, password string) (*domain.User, error) {

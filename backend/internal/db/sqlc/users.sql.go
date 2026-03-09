@@ -7,12 +7,14 @@ package db
 
 import (
 	"context"
+
+	"github.com/google/uuid"
 )
 
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (name, email, password_hash)
 VALUES ($1, $2, $3)
-RETURNING id, name, email, password_hash, created_at, updated_at
+RETURNING id, public_id, name, email, password_hash, created_at, updated_at
 `
 
 type CreateUserParams struct {
@@ -26,6 +28,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	var i User
 	err := row.Scan(
 		&i.ID,
+		&i.PublicID,
 		&i.Name,
 		&i.Email,
 		&i.PasswordHash,
@@ -36,7 +39,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, name, email, password_hash, created_at, updated_at FROM users
+SELECT id, public_id, name, email, password_hash, created_at, updated_at FROM users
 WHERE email = $1
 `
 
@@ -45,6 +48,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 	var i User
 	err := row.Scan(
 		&i.ID,
+		&i.PublicID,
 		&i.Name,
 		&i.Email,
 		&i.PasswordHash,
@@ -54,16 +58,17 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 	return i, err
 }
 
-const getUserByID = `-- name: GetUserByID :one
-SELECT id, name, email, password_hash, created_at, updated_at FROM users
-WHERE id = $1
+const getUserByPublicID = `-- name: GetUserByPublicID :one
+SELECT id, public_id, name, email, password_hash, created_at, updated_at FROM users
+WHERE public_id = $1
 `
 
-func (q *Queries) GetUserByID(ctx context.Context, id int32) (User, error) {
-	row := q.db.QueryRowContext(ctx, getUserByID, id)
+func (q *Queries) GetUserByPublicID(ctx context.Context, publicID uuid.UUID) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUserByPublicID, publicID)
 	var i User
 	err := row.Scan(
 		&i.ID,
+		&i.PublicID,
 		&i.Name,
 		&i.Email,
 		&i.PasswordHash,
@@ -74,7 +79,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id int32) (User, error) {
 }
 
 const getUsers = `-- name: GetUsers :many
-SELECT id, name, email, password_hash, created_at, updated_at FROM users
+SELECT id, public_id, name, email, password_hash, created_at, updated_at FROM users
 ORDER BY id
 `
 
@@ -89,6 +94,7 @@ func (q *Queries) GetUsers(ctx context.Context) ([]User, error) {
 		var i User
 		if err := rows.Scan(
 			&i.ID,
+			&i.PublicID,
 			&i.Name,
 			&i.Email,
 			&i.PasswordHash,

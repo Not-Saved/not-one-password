@@ -6,7 +6,7 @@ import (
 
 type AccessSession struct {
 	ID        string
-	UserID    int32
+	UserID    string
 	TokenHash string
 	CreatedAt time.Time
 	ExpiresAt time.Time
@@ -16,7 +16,7 @@ type AccessSession struct {
 
 type RefreshSession struct {
 	ID        string
-	UserID    int32
+	UserID    string
 	TokenHash string
 	CreatedAt time.Time
 	ExpiresAt time.Time

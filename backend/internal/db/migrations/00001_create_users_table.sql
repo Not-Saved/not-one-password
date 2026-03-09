@@ -2,6 +2,7 @@
 -- +goose StatementBegin
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
+    public_id UUID NOT NULL UNIQUE DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     email TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,

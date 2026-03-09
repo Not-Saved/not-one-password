@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"strconv"
 
 	"main/internal/adapters/middleware"
 	"main/internal/core/services"
@@ -28,7 +27,7 @@ func (h *UserHandler) ListUsers(ctx context.Context, request oapi.ListUsersReque
 		}, nil
 	}
 
-	var response = make([]oapi.User, 0, len(users))
+	var response = make([]oapi.UserResponse, 0, len(users))
 
 	for _, u := range users {
 		response = append(response, mapToAPIUser(u))
@@ -70,7 +69,7 @@ func (s *UserHandler) GetCurrentUser(ctx context.Context, request oapi.GetCurren
 			Message: "Unauthorized",
 		}, nil
 	}
-	user, err := s.userService.GetUserByID(ctx, session.UserID)
+	user, err := s.userService.GetUserByPublicID(ctx, session.UserID)
 	if err != nil {
 		return &oapi.GetCurrentUser500JSONResponse{
 			InternalServerErrorJSONResponse: oapi.InternalServerErrorJSONResponse{
@@ -80,9 +79,6 @@ func (s *UserHandler) GetCurrentUser(ctx context.Context, request oapi.GetCurren
 		}, nil
 	}
 
-	return &oapi.GetCurrentUser200JSONResponse{
-		Email:    user.Email,
-		Id:       strconv.FormatInt(int64(user.ID), 10),
-		Username: user.Name,
-	}, nil
+	response := mapToAPIUser(*user)
+	return oapi.GetCurrentUser200JSONResponse(response), nil
 }
