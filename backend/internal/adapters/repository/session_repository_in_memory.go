@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"main/internal/core/domain"
@@ -101,49 +100,6 @@ func (r *SessionRepositoryInMemory) getFromRefreshSessions(token string) (domain
 	defer r.mu.RUnlock()
 	session, exists := r.refreshSessionsByToken[token]
 	return session, exists
-}
-
-func (r *SessionRepositoryInMemory) CreateAccessAndRefreshSessions(
-	ctx context.Context,
-	user *domain.User,
-	deviceID string,
-) (*domain.AccessSessionLight, *domain.RefreshSessionLight, error) {
-	accessSession, err := r.NewAccessToken(ctx, user.ID, deviceID)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	refreshSession, err := r.NewRefreshToken(ctx, user.ID, deviceID)
-	if err != nil {
-		return nil, nil, err
-	}
-	r.LogContents()
-	return accessSession,
-		refreshSession,
-		nil
-}
-
-func (r *SessionRepositoryInMemory) RefreshToken(ctx context.Context, token string) (*domain.AccessSessionLight, *domain.RefreshSessionLight, error) {
-	// 1 validate refresh token exists
-	hashedToken := utils.HashToken(token)
-	refreshSession, ok := r.getFromRefreshSessions(hashedToken)
-	if !ok {
-		return nil, nil, errors.New("invalid or expired refresh token")
-	}
-
-	// 2 Generate new access token and rotate refresh token
-	accessSession, err := r.NewAccessToken(ctx, refreshSession.UserID, refreshSession.DeviceID)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	newRefreshSession, err := r.NewRefreshToken(ctx, refreshSession.UserID, refreshSession.DeviceID)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	r.LogContents()
-	return accessSession, newRefreshSession, nil
 }
 
 func (r *SessionRepositoryInMemory) GetAccessSessionByToken(

@@ -3,8 +3,11 @@ package handler
 import (
 	"context"
 	"main/internal/adapters/middleware"
+	"main/internal/core/domain"
 	"main/internal/core/services"
 	"main/internal/oapi"
+	"main/internal/utils"
+	"net/http"
 	"time"
 )
 
@@ -18,25 +21,26 @@ func NewAuthHandler(userService *services.UserService, authService *services.Aut
 }
 
 func (h *AuthHandler) IssueToken(ctx context.Context, request oapi.IssueTokenRequestObject) (oapi.IssueTokenResponseObject, error) {
-
 	_, access, refresh, err := h.authService.CreateToken(ctx, string(request.Body.Email), request.Body.Password, request.Body.DeviceID)
 
 	if err != nil {
 		return oapi.IssueToken401JSONResponse{Code: 401, Message: "invalid email or password"}, nil
 	}
 
+	tokenResponse, setCookie, err := tokenReponseAndSetCookieFromSessions(access, refresh)
+	if err != nil {
+		return nil, err
+	}
+
 	return oapi.IssueToken200JSONResponse{
-		Headers: oapi.IssueToken200ResponseHeaders{},
-		Body: oapi.TokenResponse{
-			AccessToken:  access.Token,
-			RefreshToken: refresh.Token,
-			ExpiresIn:    int(time.Until(access.ExpiresAt).Seconds()),
-		},
+		Headers: oapi.IssueToken200ResponseHeaders{SetCookie: setCookie.String()},
+		Body:    *tokenResponse,
 	}, nil
 }
 
 func (h *AuthHandler) RefreshToken(ctx context.Context, request oapi.RefreshTokenRequestObject) (oapi.RefreshTokenResponseObject, error) {
-	refreshToken, ok := middleware.GetRefreshToken(ctx)
+	tokenResponse, ok := middleware.GetTokenResponse(ctx)
+
 	if !ok {
 		return &oapi.RefreshToken500JSONResponse{
 			InternalServerErrorJSONResponse: oapi.InternalServerErrorJSONResponse{
@@ -46,7 +50,7 @@ func (h *AuthHandler) RefreshToken(ctx context.Context, request oapi.RefreshToke
 		}, nil
 	}
 
-	newAccessSession, newRefreshSession, err := h.authService.RefreshToken(ctx, refreshToken)
+	newAccessSession, newRefreshSession, err := h.authService.RefreshToken(ctx, tokenResponse.RefreshToken)
 	if err != nil {
 		return &oapi.RefreshToken401JSONResponse{
 			Code:    401,
@@ -54,12 +58,39 @@ func (h *AuthHandler) RefreshToken(ctx context.Context, request oapi.RefreshToke
 		}, nil
 	}
 
+	newTokenResponse, setCookie, err := tokenReponseAndSetCookieFromSessions(newAccessSession, newRefreshSession)
+	if err != nil {
+		return nil, err
+	}
+
 	return oapi.RefreshToken200JSONResponse{
-		Headers: oapi.RefreshToken200ResponseHeaders{},
-		Body: oapi.TokenResponse{
-			AccessToken:  newAccessSession.Token,
-			RefreshToken: newRefreshSession.Token,
-			ExpiresIn:    int(time.Until(newAccessSession.ExpiresAt).Seconds()),
-		},
+		Headers: oapi.RefreshToken200ResponseHeaders{SetCookie: setCookie.String()},
+		Body:    *newTokenResponse,
 	}, nil
+}
+
+func tokenReponseAndSetCookieFromSessions(access *domain.AccessSessionLight, refresh *domain.RefreshSessionLight) (*oapi.TokenResponse, *http.Cookie, error) {
+	tokenResponse := domain.Tokens{
+		AccessToken:  access.Token,
+		RefreshToken: refresh.Token,
+		ExpiresIn:    utils.SecondsUntilTime(access.ExpiresAt),
+	}
+	tokenBase64, err := tokenResponse.ToBase64()
+	if err != nil {
+		return nil, nil, err
+	}
+	setCookie := newSetCookie(tokenBase64, refresh.ExpiresAt)
+	return &oapi.TokenResponse{Token: tokenBase64}, &setCookie, nil
+}
+
+func newSetCookie(value string, expiresAt time.Time) http.Cookie {
+	return http.Cookie{
+		Name:     middleware.SessionCookieName,
+		Value:    value,
+		MaxAge:   utils.SecondsUntilTime(expiresAt),
+		HttpOnly: true,
+		Secure:   true,
+		Path:     "/",
+		SameSite: http.SameSiteLaxMode,
+	}
 }

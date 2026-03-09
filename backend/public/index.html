@@ -9,16 +9,14 @@
         <div id="app">
             <h1>Hello</h1>
             <button id="btn">Login</button>
-            <p id="access_token"></p>
-            <p id="refresh_token"></p>
+            <p id="base64"></p>
             <button id="btn2">Get user</button>
             <p id="output2"></p>
             <button id="btn3">Refresh token</button>
         </div>
 
         <script>
-            let token = "";
-            let refresh = "";
+            let base64 = "";
             let deviceID = "web"; // You can change this to a unique identifier for each device
 
             document
@@ -30,18 +28,15 @@
                             "Content-Type": "application/json",
                         },
                         body: JSON.stringify({
-                            email: "test@test.it",
+                            email: "test@test.com",
                             password: "password",
                             deviceID: deviceID,
                         }),
                     });
                     const jsonRes = await res.json();
 
-                    token = jsonRes.accessToken;
-                    refresh = jsonRes.refreshToken;
-                    document.getElementById("access_token").textContent = token;
-                    document.getElementById("refresh_token").textContent =
-                        refresh;
+                    base64 = jsonRes.token;
+                    document.getElementById("base64").textContent = base64;
                 });
             document
                 .getElementById("btn2")
@@ -50,7 +45,7 @@
                         method: "GET",
                         credentials: "include",
                         headers: {
-                            Authorization: "Bearer " + token,
+                            Authorization: "Bearer " + base64,
                         },
                     });
 
@@ -68,21 +63,16 @@
                             credentials: "include",
                             headers: {
                                 "Content-Type": "application/json",
-                                Authorization: "Bearer " + refresh,
+                                Authorization: "Bearer " + base64,
                             },
                             body: JSON.stringify({
                                 deviceID: deviceID,
                             }),
                         },
                     );
-
                     const jsonRes = await res.json();
-
-                    token = jsonRes.accessToken;
-                    refresh = jsonRes.refreshToken;
-                    document.getElementById("access_token").textContent = token;
-                    document.getElementById("refresh_token").textContent =
-                        refresh;
+                    base64 = jsonRes.token;
+                    document.getElementById("base64").textContent = base64;
                 });
         </script>
     </body>

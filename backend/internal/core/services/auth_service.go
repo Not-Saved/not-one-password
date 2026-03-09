@@ -31,8 +31,12 @@ func (s *AuthService) CreateToken(ctx context.Context, email, password, deviceID
 		return nil, nil, nil, fmt.Errorf("Invalid email or password")
 	}
 
-	accessSession, refreshSession, err := s.sessionRepository.CreateAccessAndRefreshSessions(ctx, user, deviceID)
+	accessSession, err := s.sessionRepository.NewAccessToken(ctx, user.ID, deviceID)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
+	refreshSession, err := s.sessionRepository.NewRefreshToken(ctx, user.ID, deviceID)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -41,13 +45,24 @@ func (s *AuthService) CreateToken(ctx context.Context, email, password, deviceID
 }
 
 func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (*domain.AccessSessionLight, *domain.RefreshSessionLight, error) {
-	accessSession, refreshSession, err := s.sessionRepository.RefreshToken(ctx, refreshToken)
-
+	// 1 validate refresh token exists
+	refreshSession, err := s.sessionRepository.GetRefreshSessionByToken(ctx, refreshToken)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	return accessSession, refreshSession, nil
+	// 2 Generate new access token and rotate refresh token
+	accessSession, err := s.sessionRepository.NewAccessToken(ctx, refreshSession.UserID, refreshSession.DeviceID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	newRefreshSession, err := s.sessionRepository.NewRefreshToken(ctx, refreshSession.UserID, refreshSession.DeviceID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return accessSession, newRefreshSession, nil
 }
 
 func (s *AuthService) GetAccessSessionByToken(ctx context.Context, token string) (*domain.AccessSession, error) {

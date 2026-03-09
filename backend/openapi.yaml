@@ -9,6 +9,7 @@ paths:
       operationId: listUsers
       security:
         - BearerAuth: []
+        - CookieAuth: []
       responses:
         "200":
           description: A list of users
@@ -26,6 +27,7 @@ paths:
       operationId: getCurrentUser
       security:
         - BearerAuth: []
+        - CookieAuth: []
       responses:
         "200":
           description: User retrieved successfully
@@ -135,6 +137,11 @@ components:
       type: http
       scheme: bearer
       bearerFormat: opaque
+    CookieAuth:
+      type: apiKey
+      in: cookie
+      name: SESSION_ID # cookie name
+
   schemas:
     UserResponse:
       type: object
@@ -202,26 +209,15 @@ components:
         deviceID:
           type: string
           description: Unique identifier for the client device (used for token management)
+
     TokenResponse:
       type: object
       required:
-        - accessToken
-        - refreshToken
-        - expiresIn
+        - token
       properties:
-        accessToken:
+        token:
           type: string
-          description: JWT access token
-        refreshToken:
-          type: string
-          description: Refresh token
-        tokenType:
-          type: string
-          example: Bearer
-        expiresIn:
-          type: integer
-          description: Access token expiration time in seconds
-          example: 900
+          description: Base64 representation of the token
 
     ErrorResponse:
       type: object

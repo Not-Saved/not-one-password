@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"main/internal/core/domain"
 	"main/internal/oapi"
 	"net/http"
@@ -10,9 +11,9 @@ import (
 )
 
 const (
-	SessionContextKey      contextKey = "session"
-	RefreshTokenContextKey contextKey = "refresh_token"
-	AccessTokenContextKey  contextKey = "access_token"
+	SessionContextKey       contextKey = "session"
+	TokenResponseContextKey contextKey = "token_response"
+	SessionCookieName       string     = "SESSION_ID"
 )
 
 func (m *Middleware) AuthMiddleware(next oapi.StrictHandlerFunc, operationID string) oapi.StrictHandlerFunc {
@@ -29,57 +30,51 @@ func (m *Middleware) AuthMiddleware(next oapi.StrictHandlerFunc, operationID str
 }
 
 func (m *Middleware) hasRefreshToken(next oapi.StrictHandlerFunc, ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" {
-		writeError(w, "missing Authorization header")
+	tokenBase64, err := getBase64TokenFromRequest(r)
+	if err != nil {
+		writeError(w, "no valid authentication method detected")
 		return nil, nil
 	}
 
-	// Expect format: "Bearer <token>"
-	const prefix = "Bearer "
-	if !strings.HasPrefix(authHeader, prefix) {
-		writeError(w, "invalid Authorization header format")
+	tokenResponse, err := domain.NewTokensFromBase64(tokenBase64)
+	if err != nil {
+		writeError(w, "invalid token format")
 		return nil, nil
 	}
 
-	tokenString := strings.TrimPrefix(authHeader, prefix)
-
-	session, err := m.AuthService.GetRefreshSessionByToken(ctx, tokenString)
+	session, err := m.AuthService.GetRefreshSessionByToken(ctx, tokenResponse.RefreshToken)
 	if err != nil {
 		writeError(w, "invalid or expired token")
 		return nil, nil
 	}
 
 	ctx = context.WithValue(ctx, SessionContextKey, session)
-	ctx = context.WithValue(ctx, RefreshTokenContextKey, tokenString)
+	ctx = context.WithValue(ctx, TokenResponseContextKey, tokenResponse)
 
 	return next(ctx, w, r, request)
 }
 
 func (m *Middleware) hasAccessToken(next oapi.StrictHandlerFunc, ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" {
-		writeError(w, "missing Authorization header")
+	tokenBase64, err := getBase64TokenFromRequest(r)
+	if err != nil {
+		writeError(w, "no valid authentication method detected")
 		return nil, nil
 	}
 
-	// Expect format: "Bearer <token>"
-	const prefix = "Bearer "
-	if !strings.HasPrefix(authHeader, prefix) {
-		writeError(w, "invalid Authorization header format")
+	tokenResponse, err := domain.NewTokensFromBase64(tokenBase64)
+	if err != nil {
+		writeError(w, "invalid token format")
 		return nil, nil
 	}
 
-	tokenString := strings.TrimPrefix(authHeader, prefix)
-
-	session, err := m.AuthService.GetAccessSessionByToken(ctx, tokenString)
+	session, err := m.AuthService.GetAccessSessionByToken(ctx, tokenResponse.AccessToken)
 	if err != nil {
 		writeError(w, "invalid or expired token")
 		return nil, nil
 	}
 
 	ctx = context.WithValue(ctx, SessionContextKey, session)
-	ctx = context.WithValue(ctx, AccessTokenContextKey, tokenString)
+	ctx = context.WithValue(ctx, TokenResponseContextKey, tokenResponse)
 
 	return next(ctx, w, r, request)
 }
@@ -93,6 +88,33 @@ func writeError(w http.ResponseWriter, message string) {
 	})
 }
 
+func getBase64TokenFromRequest(r *http.Request) (string, error) {
+	authHeader := r.Header.Get("Authorization")
+
+	cookie, err := r.Cookie(SessionCookieName)
+	if authHeader == "" && err != nil {
+		return "", fmt.Errorf("Unauthorized")
+	}
+
+	var tokenBase64 string
+
+	if authHeader != "" {
+		// Expect format: "Bearer <token>"
+		const prefix = "Bearer "
+		if !strings.HasPrefix(authHeader, prefix) {
+			return "", fmt.Errorf("Unauthorized")
+		}
+		tokenBase64 = strings.TrimPrefix(authHeader, prefix)
+
+	}
+
+	if cookie != nil {
+		tokenBase64 = cookie.Value
+	}
+
+	return tokenBase64, nil
+}
+
 func GetAccessSession(ctx context.Context) (*domain.AccessSession, bool) {
 	session, ok := ctx.Value(SessionContextKey).(*domain.AccessSession)
 	return session, ok
@@ -103,12 +125,7 @@ func GetRefreshSession(ctx context.Context) (*domain.RefreshSession, bool) {
 	return session, ok
 }
 
-func GetAccessToken(ctx context.Context) (string, bool) {
-	token, ok := ctx.Value(AccessTokenContextKey).(string)
-	return token, ok
-}
-
-func GetRefreshToken(ctx context.Context) (string, bool) {
-	token, ok := ctx.Value(RefreshTokenContextKey).(string)
+func GetTokenResponse(ctx context.Context) (*domain.Tokens, bool) {
+	token, ok := ctx.Value(TokenResponseContextKey).(*domain.Tokens)
 	return token, ok
 }

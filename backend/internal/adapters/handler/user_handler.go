@@ -38,15 +38,6 @@ func (h *UserHandler) ListUsers(ctx context.Context, request oapi.ListUsersReque
 }
 
 func (h *UserHandler) CreateUser(ctx context.Context, request oapi.CreateUserRequestObject) (oapi.CreateUserResponseObject, error) {
-	if request.Body == nil {
-		return oapi.CreateUser400JSONResponse{
-			BadRequestJSONResponse: oapi.BadRequestJSONResponse{
-				Code:    400,
-				Message: "missing request body",
-			},
-		}, nil
-	}
-
 	user, err := h.userService.CreateUser(ctx, request.Body.Name, string(request.Body.Email), request.Body.Password)
 	if err != nil {
 		return oapi.CreateUser400JSONResponse{

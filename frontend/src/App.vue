@@ -1,7 +1,4 @@
-<script setup lang="ts">
-import { client } from './openapi/fetch'
-client.GET('')
-</script>
+<script setup lang="ts"></script>
 
 <template>
   <h1>You did it!</h1>
