@@ -30,6 +30,14 @@ func refreshSessionKey(tokenHash string) string {
 	return fmt.Sprintf("session:refresh:%s", tokenHash)
 }
 
+func userDeviceAccessKey(userID, deviceID string) string {
+	return fmt.Sprintf("user:%s:device:%s:access", userID, deviceID)
+}
+
+func userDeviceRefreshKey(userID, deviceID string) string {
+	return fmt.Sprintf("user:%s:device:%s:refresh", userID, deviceID)
+}
+
 //
 // ADD SESSIONS
 //
@@ -98,11 +106,32 @@ func (r *SessionRepositoryRedis) GetRefreshSessionByToken(ctx context.Context, t
 	return &session, nil
 }
 
+// REVOKE OLD TOKENS
+// Revoke old access token for user+device
+func (r *SessionRepositoryRedis) revokeOldAccessToken(ctx context.Context, userID, deviceID string) error {
+	if oldHash, err := r.rdb.Get(ctx, userDeviceAccessKey(userID, deviceID)).Result(); err == nil {
+		return r.DeleteAccessSession(ctx, oldHash)
+	}
+	return nil
+}
+
+// Revoke old refresh token for user+device
+func (r *SessionRepositoryRedis) revokeOldRefreshToken(ctx context.Context, userID, deviceID string) error {
+	if oldHash, err := r.rdb.Get(ctx, userDeviceRefreshKey(userID, deviceID)).Result(); err == nil {
+		return r.DeleteRefreshSession(ctx, oldHash)
+	}
+	return nil
+}
+
 //
-// CREATE TOKENS
+// CREATE NEW TOKENS WITH REVOCATION
 //
 
 func (r *SessionRepositoryRedis) NewAccessToken(ctx context.Context, userID, deviceID string) (*domain.AccessSessionLight, error) {
+	if err := r.revokeOldAccessToken(ctx, userID, deviceID); err != nil {
+		return nil, err
+	}
+
 	token, tokenHash, err := GenerateTokenForSession()
 	if err != nil {
 		return nil, err
@@ -121,6 +150,11 @@ func (r *SessionRepositoryRedis) NewAccessToken(ctx context.Context, userID, dev
 		return nil, err
 	}
 
+	// Store pointer for user+device
+	if err := r.rdb.Set(ctx, userDeviceAccessKey(userID, deviceID), session.TokenHash, ACCESS_TOKEN_EXPIRATION).Err(); err != nil {
+		return nil, err
+	}
+
 	return &domain.AccessSessionLight{
 		Token:     token,
 		ExpiresAt: session.ExpiresAt,
@@ -128,6 +162,10 @@ func (r *SessionRepositoryRedis) NewAccessToken(ctx context.Context, userID, dev
 }
 
 func (r *SessionRepositoryRedis) NewRefreshToken(ctx context.Context, userID, deviceID string) (*domain.RefreshSessionLight, error) {
+	if err := r.revokeOldRefreshToken(ctx, userID, deviceID); err != nil {
+		return nil, err
+	}
+
 	token, tokenHash, err := GenerateTokenForSession()
 	if err != nil {
 		return nil, err
@@ -143,6 +181,11 @@ func (r *SessionRepositoryRedis) NewRefreshToken(ctx context.Context, userID, de
 	}
 
 	if err := r.addRefreshSession(ctx, session); err != nil {
+		return nil, err
+	}
+
+	// Store pointer for user+device
+	if err := r.rdb.Set(ctx, userDeviceRefreshKey(userID, deviceID), session.TokenHash, REFRESH_TOKEN_EXPIRATION).Err(); err != nil {
 		return nil, err
 	}
 
