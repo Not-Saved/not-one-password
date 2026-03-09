@@ -19,7 +19,7 @@ const (
 func (m *Middleware) AuthMiddleware(next oapi.StrictHandlerFunc, operationID string) oapi.StrictHandlerFunc {
 	return func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		switch operationID {
-		case "GetCurrentUser", "ListUsers":
+		case "GetCurrentUser", "ListUsers", "LogoutUser":
 			return m.hasAccessToken(next, ctx, w, r, request)
 		case "RefreshToken":
 			return m.hasRefreshToken(next, ctx, w, r, request)

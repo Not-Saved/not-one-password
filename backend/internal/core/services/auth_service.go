@@ -85,3 +85,15 @@ func (s *AuthService) GetRefreshSessionByToken(ctx context.Context, token string
 
 	return refreshSession, nil
 }
+
+func (s *AuthService) Logout(ctx context.Context, userID, deviceID string) error {
+	err := s.sessionRepository.DeleteAccessSession(ctx, userID, deviceID)
+	if err != nil {
+		return err
+	}
+	err = s.sessionRepository.DeleteRefreshSession(ctx, userID, deviceID)
+	if err != nil {
+		return err
+	}
+	return nil
+}

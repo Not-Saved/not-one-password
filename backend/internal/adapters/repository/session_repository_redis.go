@@ -110,7 +110,7 @@ func (r *SessionRepositoryRedis) GetRefreshSessionByToken(ctx context.Context, t
 // Revoke old access token for user+device
 func (r *SessionRepositoryRedis) revokeOldAccessToken(ctx context.Context, userID, deviceID string) error {
 	if oldHash, err := r.rdb.Get(ctx, userDeviceAccessKey(userID, deviceID)).Result(); err == nil {
-		return r.DeleteAccessSession(ctx, oldHash)
+		return r.rdb.Del(ctx, accessSessionKey(oldHash)).Err()
 	}
 	return nil
 }
@@ -118,7 +118,7 @@ func (r *SessionRepositoryRedis) revokeOldAccessToken(ctx context.Context, userI
 // Revoke old refresh token for user+device
 func (r *SessionRepositoryRedis) revokeOldRefreshToken(ctx context.Context, userID, deviceID string) error {
 	if oldHash, err := r.rdb.Get(ctx, userDeviceRefreshKey(userID, deviceID)).Result(); err == nil {
-		return r.DeleteRefreshSession(ctx, oldHash)
+		return r.rdb.Del(ctx, refreshSessionKey(oldHash)).Err()
 	}
 	return nil
 }
@@ -199,10 +199,10 @@ func (r *SessionRepositoryRedis) NewRefreshToken(ctx context.Context, userID, de
 // DELETE SESSIONS
 //
 
-func (r *SessionRepositoryRedis) DeleteAccessSession(ctx context.Context, tokenHash string) error {
-	return r.rdb.Del(ctx, accessSessionKey(tokenHash)).Err()
+func (r *SessionRepositoryRedis) DeleteAccessSession(ctx context.Context, userID, deviceID string) error {
+	return r.revokeOldAccessToken(ctx, userID, deviceID)
 }
 
-func (r *SessionRepositoryRedis) DeleteRefreshSession(ctx context.Context, tokenHash string) error {
-	return r.rdb.Del(ctx, refreshSessionKey(tokenHash)).Err()
+func (r *SessionRepositoryRedis) DeleteRefreshSession(ctx context.Context, userID, deviceID string) error {
+	return r.revokeOldRefreshToken(ctx, userID, deviceID)
 }

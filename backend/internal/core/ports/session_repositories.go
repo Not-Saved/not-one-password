@@ -11,7 +11,6 @@ type SessionRepository interface {
 		userID,
 		deviceID string,
 	) (*domain.AccessSessionLight, error)
-
 	NewRefreshToken(
 		ctx context.Context,
 		userID,
@@ -20,4 +19,7 @@ type SessionRepository interface {
 
 	GetAccessSessionByToken(ctx context.Context, token string) (*domain.AccessSession, error)
 	GetRefreshSessionByToken(ctx context.Context, token string) (*domain.RefreshSession, error)
+
+	DeleteAccessSession(ctx context.Context, userID, deviceID string) error
+	DeleteRefreshSession(ctx context.Context, userID, deviceID string) error
 }

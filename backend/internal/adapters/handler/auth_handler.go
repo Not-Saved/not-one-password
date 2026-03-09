@@ -69,6 +69,31 @@ func (h *AuthHandler) RefreshToken(ctx context.Context, request oapi.RefreshToke
 	}, nil
 }
 
+func (h *AuthHandler) LogoutUser(ctx context.Context, r oapi.LogoutUserRequestObject) (oapi.LogoutUserResponseObject, error) {
+	session, ok := middleware.GetAccessSession(ctx)
+	if !ok {
+		return oapi.LogoutUser401JSONResponse{
+			Code:    401,
+			Message: "Unauthorized",
+		}, nil
+	}
+	err := h.authService.Logout(ctx, session.UserID, session.DeviceID)
+	if err != nil {
+		return oapi.LogoutUser500JSONResponse{
+			InternalServerErrorJSONResponse: oapi.InternalServerErrorJSONResponse{
+				Code:    500,
+				Message: "Internal server error",
+			},
+		}, nil
+	}
+
+	emptySetCookie := newEmptySetCookie()
+	return oapi.LogoutUser204Response{
+		Headers: oapi.LogoutUser204ResponseHeaders{
+			SetCookie: emptySetCookie.String(),
+		}}, nil
+}
+
 func tokenReponseAndSetCookieFromSessions(access *domain.AccessSessionLight, refresh *domain.RefreshSessionLight) (*oapi.TokenResponse, *http.Cookie, error) {
 	tokenResponse := domain.Tokens{
 		AccessToken:  access.Token,
@@ -88,6 +113,18 @@ func newSetCookie(value string, expiresAt time.Time) http.Cookie {
 		Name:     middleware.SessionCookieName,
 		Value:    value,
 		MaxAge:   utils.SecondsUntilTime(expiresAt),
+		HttpOnly: true,
+		Secure:   true,
+		Path:     "/",
+		SameSite: http.SameSiteLaxMode,
+	}
+}
+
+func newEmptySetCookie() http.Cookie {
+	return http.Cookie{
+		Name:     middleware.SessionCookieName,
+		Value:    "",
+		MaxAge:   -1,
 		HttpOnly: true,
 		Secure:   true,
 		Path:     "/",

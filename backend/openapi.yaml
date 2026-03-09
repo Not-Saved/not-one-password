@@ -131,6 +131,34 @@ paths:
                 message: Invalid or expired refresh token
         "500":
           $ref: "#/components/responses/InternalServerError"
+
+  /logout:
+    post:
+      summary: Logout current user
+      operationId: logoutUser
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      responses:
+        "204":
+          description: Logout successful, tokens revoked
+          headers:
+            Set-Cookie:
+              description: Updated HttpOnly cookies
+              schema:
+                type: string
+        "401":
+          description: Unauthorized, user not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: 401
+                message: User not authenticated
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
 components:
   securitySchemes:
     BearerAuth:
