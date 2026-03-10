@@ -6,6 +6,8 @@ import (
 	"main/internal/adapters/middleware"
 	"main/internal/core/services"
 	"main/internal/oapi"
+
+	"github.com/oapi-codegen/runtime/types"
 )
 
 type UserHandler struct {
@@ -37,7 +39,7 @@ func (h *UserHandler) ListUsers(ctx context.Context, request oapi.ListUsersReque
 }
 
 func (h *UserHandler) CreateUser(ctx context.Context, request oapi.CreateUserRequestObject) (oapi.CreateUserResponseObject, error) {
-	user, err := h.userService.CreateUser(ctx, request.Body.Name, string(request.Body.Email), request.Body.Password)
+	_, err := h.userService.CreateUser(ctx, request.Body.Name, string(request.Body.Email), request.Body.Password)
 	if err != nil {
 		return oapi.CreateUser400JSONResponse{
 			BadRequestJSONResponse: oapi.BadRequestJSONResponse{
@@ -47,9 +49,7 @@ func (h *UserHandler) CreateUser(ctx context.Context, request oapi.CreateUserReq
 		}, nil
 	}
 
-	response := mapToAPIUser(*user)
-
-	return oapi.CreateUser201JSONResponse(response), nil
+	return oapi.CreateUser201Response{}, nil
 }
 
 func (s *UserHandler) GetCurrentUser(ctx context.Context, request oapi.GetCurrentUserRequestObject) (oapi.GetCurrentUserResponseObject, error) {
@@ -81,4 +81,22 @@ func (s *UserHandler) GetCurrentUser(ctx context.Context, request oapi.GetCurren
 
 	response := mapToAPIUser(*user)
 	return oapi.GetCurrentUser200JSONResponse(response), nil
+}
+
+func (s *UserHandler) ConfirmUser(ctx context.Context, r oapi.ConfirmUserRequestObject) (oapi.ConfirmUserResponseObject, error) {
+	user, err := s.userService.ConfirmUser(ctx, r.Body.Code)
+	if err != nil {
+		return oapi.ConfirmUser400JSONResponse{
+			BadRequestJSONResponse: oapi.BadRequestJSONResponse{
+				Code:    400,
+				Message: err.Error(),
+			},
+		}, nil
+	}
+
+	return oapi.ConfirmUser200JSONResponse{
+		Email: types.Email(user.Email),
+		Id:    user.PublicID,
+		Name:  &user.Email,
+	}, nil
 }

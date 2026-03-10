@@ -11,11 +11,13 @@ import (
 type Repositories struct {
 	ports.UserRepository
 	ports.SessionRepository
+	ports.UserIntentRepository
 }
 
 func NewRepositories(db *sql.DB, rdb *redis.Client) *Repositories {
 	return &Repositories{
-		UserRepository:    repository.NewUserRepositoryPg(db),
-		SessionRepository: repository.NewSessionRepositoryRedis(rdb),
+		UserRepository:       repository.NewUserRepositoryPg(db),
+		SessionRepository:    repository.NewSessionRepositoryRedis(rdb),
+		UserIntentRepository: repository.NewUserIntentRepositoryRedis(rdb),
 	}
 }

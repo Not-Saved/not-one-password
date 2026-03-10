@@ -27,6 +27,11 @@ const (
 	CookieAuthScopes = "CookieAuth.Scopes"
 )
 
+// ConfirmUserRequest defines model for ConfirmUserRequest.
+type ConfirmUserRequest struct {
+	Code string `json:"code"`
+}
+
 // CreateUserRequest defines model for CreateUserRequest.
 type CreateUserRequest struct {
 	Email    openapi_types.Email `json:"email"`
@@ -73,6 +78,9 @@ type IssueTokenJSONRequestBody = LoginRequest
 // CreateUserJSONRequestBody defines body for CreateUser for application/json ContentType.
 type CreateUserJSONRequestBody = CreateUserRequest
 
+// ConfirmUserJSONRequestBody defines body for ConfirmUser for application/json ContentType.
+type ConfirmUserJSONRequestBody = ConfirmUserRequest
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// Logout current user
@@ -90,6 +98,9 @@ type ServerInterface interface {
 	// Create a new user
 	// (POST /user)
 	CreateUser(w http.ResponseWriter, r *http.Request)
+	// Create a new user
+	// (POST /user/confirm)
+	ConfirmUser(w http.ResponseWriter, r *http.Request)
 	// List all users
 	// (GET /users)
 	ListUsers(w http.ResponseWriter, r *http.Request)
@@ -132,6 +143,8 @@ func (siw *ServerInterfaceWrapper) RefreshToken(w http.ResponseWriter, r *http.R
 	ctx := r.Context()
 
 	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
 
 	r = r.WithContext(ctx)
 
@@ -187,6 +200,20 @@ func (siw *ServerInterfaceWrapper) CreateUser(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateUser(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ConfirmUser operation middleware
+func (siw *ServerInterfaceWrapper) ConfirmUser(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ConfirmUser(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -343,6 +370,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("POST "+options.BaseURL+"/token", wrapper.IssueToken)
 	m.HandleFunc("GET "+options.BaseURL+"/user", wrapper.GetCurrentUser)
 	m.HandleFunc("POST "+options.BaseURL+"/user", wrapper.CreateUser)
+	m.HandleFunc("POST "+options.BaseURL+"/user/confirm", wrapper.ConfirmUser)
 	m.HandleFunc("GET "+options.BaseURL+"/users", wrapper.ListUsers)
 
 	return m
@@ -535,13 +563,12 @@ type CreateUserResponseObject interface {
 	VisitCreateUserResponse(w http.ResponseWriter) error
 }
 
-type CreateUser201JSONResponse UserResponse
+type CreateUser201Response struct {
+}
 
-func (response CreateUser201JSONResponse) VisitCreateUserResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
+func (response CreateUser201Response) VisitCreateUserResponse(w http.ResponseWriter) error {
 	w.WriteHeader(201)
-
-	return json.NewEncoder(w).Encode(response)
+	return nil
 }
 
 type CreateUser400JSONResponse struct{ BadRequestJSONResponse }
@@ -558,6 +585,43 @@ type CreateUser500JSONResponse struct {
 }
 
 func (response CreateUser500JSONResponse) VisitCreateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ConfirmUserRequestObject struct {
+	Body *ConfirmUserJSONRequestBody
+}
+
+type ConfirmUserResponseObject interface {
+	VisitConfirmUserResponse(w http.ResponseWriter) error
+}
+
+type ConfirmUser200JSONResponse UserResponse
+
+func (response ConfirmUser200JSONResponse) VisitConfirmUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ConfirmUser400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ConfirmUser400JSONResponse) VisitConfirmUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ConfirmUser500JSONResponse struct {
+	InternalServerErrorJSONResponse
+}
+
+func (response ConfirmUser500JSONResponse) VisitConfirmUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
 
@@ -608,6 +672,9 @@ type StrictServerInterface interface {
 	// Create a new user
 	// (POST /user)
 	CreateUser(ctx context.Context, request CreateUserRequestObject) (CreateUserResponseObject, error)
+	// Create a new user
+	// (POST /user/confirm)
+	ConfirmUser(ctx context.Context, request ConfirmUserRequestObject) (ConfirmUserResponseObject, error)
 	// List all users
 	// (GET /users)
 	ListUsers(ctx context.Context, request ListUsersRequestObject) (ListUsersResponseObject, error)
@@ -776,6 +843,37 @@ func (sh *strictHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ConfirmUser operation middleware
+func (sh *strictHandler) ConfirmUser(w http.ResponseWriter, r *http.Request) {
+	var request ConfirmUserRequestObject
+
+	var body ConfirmUserJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ConfirmUser(ctx, request.(ConfirmUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ConfirmUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ConfirmUserResponseObject); ok {
+		if err := validResponse.VisitConfirmUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListUsers operation middleware
 func (sh *strictHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	var request ListUsersRequestObject
@@ -803,25 +901,26 @@ func (sh *strictHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/9RX32/bNhD+VwhuQDdAi501HQa9NUnXecvWIU6egmBgpbPNRiKZI+nUC/S/D0falmRL",
-	"cZK66/qmH+Tx7r7vuzve80yXRitQzvL0niNYo5WF8HIs8nO49WAdvWVaOVDhURhTyEw4qdXgg9WKvsFH",
-	"UZoC4soceHo0HCa8BGvFFHjK/5DWSjVlCLdeIuRsIqHI2QslSnjBq4TbbAaloP3fIkx4yr8Z1L4N4l87",
-	"eIOo8XzpJa+qKuE52AylIW94ykdqLgqZM6mMd2R3pBygEsUYcA4Y9j8nnFftcMa6BDejgO5AOXaHWk2Z",
-	"VszNgNlw0l5jiiEsLTMIQVTrAwJaJwjCwaUFbIBmUBtAJyOgUApZ0MNEYykcT5dfEu4WhqKyDqWakucE",
-	"C63c+mGEtXca85aZ9ceEl1KdgZq6GU9/3rJbJXyFP0+v4iHJ2om1lev1Rv3+A2QBxnaStkKLIDVwC3gt",
-	"rUjlYBoRWSPYWNqT313ehyNri11On+mpVL1w5DCXGYxO43MT8Eslbz0wmYNyciIB2URj4FZWSOJb3Mq+",
-	"85aURP/0DShWCiWmUIJy33eB+gT8d8H8cGq2EE3qYLvydEHe94MbgtvO0rGw8NMRQzAIFpQLCmZ6EhIV",
-	"9+xyNK7qcikKqc+jJ2RStnPovcwfElzNyt/0TLFTDTuDCAa9JQo39LQdFNULyDxKtxhT3VhWeRAI+NqT",
-	"Yu/5+/D2y8pbbcStJ5uh0JCxuKD2aeacIf9PtL6RsDIjCZ8sfOKr2Pj4zXg8evfn36PTersw8ndYxKIn",
-	"1UQHuKULCSAI2Ou/Rjzhc0AbQT88GB4M6UBtQAkjecpfHgwPXga2uVkIaVDoqfZRcToqj8AL/BjlPCVd",
-	"au/IPk/aPe/H4dE20eJyZn2WgbUTXySRXpYhzPUNUP5nIHLAYGMM7oeYjg5lm1w4yNmvzpl3qliwmCTL",
-	"m81iE25KztHw8Hld+LDZtkJKlXZMeDej4pKRN3tsVZeKLGuU/0CeMN973KvhsO+sNR6DrtbdZDFPr9r8",
-	"vbqukvsWFa+uq+uEW1+WAhc1lJlHpDpKDgaTA4QJgp31c+Y8LrhY1pUN1gwfAc7jUtyuhR0pvlhRL/gD",
-	"eYOXxeKrYeJqTtPI4KMJE+EyomXp3v9I+NBRn42PLfYtOcREAIwJteGJjVxc97tuJo6s9VDzMEwXxzpf",
-	"7I2CrbGlarcbhx6q/wH9JSXhudzf5HwYofpB2a2IR5CncZvau4hCxyd+rweu/asnQwjjqCjspwtmrYjA",
-	"5V16CFU6vedT6FDDW3AnsZp39/P9UbM1Enb1Pup2CA4lzDep+XV28C/Zqd/CZptOeuphffP9TPVw+2r9",
-	"qKJ4+N8yLwtedvHuydVpT+KOeWOCKbhrjFr0ZHv1fCZtULL9VClLB6V9WmbrawmiWHRl+jUrpHV0yYxR",
-	"fMlRlhwRRbHypKqqfwMAAP//JvP9E88TAAA=",
+	"H4sIAAAAAAAC/9RYbW/bNhD+KwQ3oBugxc6aDoO+5aXrvGXrECefgmBgpbPFRiKZI+nUM/TfB5K2Xmwp",
+	"dlJnWb7JMnm8u+e5545a0EQWSgoQRtN4QRG0kkKD/3HC0gu4s6CN+5VIYUD4R6ZUzhNmuBSDz1oK9w6+",
+	"sELlEFamQOOj4TCiBWjNpkBj+gfXmospQbizHCElEw55St4IVsAbWkZUJxkUzO3/FmFCY/rNoPZtEP7V",
+	"g/eIEi+WXtKyLCOagk6QK+cNjelIzFjOU8KFssbZHQkDKFg+BpwB+v1PCeddO5yxLMBkLqB7EIbcoxRT",
+	"IgUxGRDtT9prTCGEpWUCPoiyOsCjdSrFhGNxpQEbqCmUCtDwgGgIZUHNXLkgtEEupt7QChYaX4dVN9Fq",
+	"lfz0GRKfylMEZuDBE6BgPHcPE4kFMzRevonWz4yoQ77DmYgqpvW9xLRlpnoZ0YKLcxBTk9H452hLLP6Q",
+	"qHKistIVXhuH3uRV1PCUWFrhwsA0gF6RpLG0B8JoFyRqi11On8spF71wpDDjCYzOwnOTU1eC31kgPAVh",
+	"+IQDkolET98k547SYSv5zmpXrO4/eQuCFEywKRQgzPddoD4C/20wP5yaDUSjOtiuPF067/vB9cFtZumE",
+	"afjpiCAoBA3CeJEgcuITFfZsczSs6nIpFFKfR4/IJG/n0FqePlRwNSt/k5kgZxK2BuENWu0o3KinzaCc",
+	"JEFikZv52EnTspEAQ8Bj6yp2QT/5X7+svJWK3Vln02uZMxYW1D5lxigvP1LecliZ4Q6fxL+iq9jo+P14",
+	"PPr459+js3o7U/x3mAdd5WIiPdzc+AQ4CMjxXyMa0RmgDqAfHgwPhu5AqUAwxWlM3x4MD956tpnMhzTI",
+	"5VTaUHEyVJ4Dz/NjlNLY1aW0xtmnUbut/jg82iRaWE60TRLQemLzKNBLE4SZvAWX/wxYCuhtjMH8ENLR",
+	"UdkqZQZS8qsx6qPI5yQkSdNmP1qH2yXnaHj4tEZ/2OyMPqVCGsKsyZy4JM6bPXbDK+EsS+T/QBoR23vc",
+	"u+Gw76wKj0HXdNBkMY2v2/y9vimjRYuK1zflTUS1LQqG8xrKxCI6HXUOepMDhAmCzvo5cxEWXC51ZY01",
+	"wx3A2S3FbS3sSPHlinreH0gbvMznr4aJq1FQIoEvyg+dy4iW0r3/qfOho16Kj0tWEeYhJEys+aYDO6sO",
+	"2M3NkdYWamb6eeNEpvO9kbI1yJTtBmTQQvk/KAjukvDUalivAj9U9YOyvUZ2oFPjCrf3svIzgGN8NYLt",
+	"v54SBD+gslx/fQlVFeG5vK0evG7HCzqFjmr4AOY06Ht3h98fNVtDYlc3dP0PwSCH2To1X2dPf0mt/ADr",
+	"jTvq0cP6LvxMerh52d5JFA872rBDL/HmugjyaBnZUxWGAAkjAu4bU5J7GiThY0Z/O2p87Xiu/G9+T/mP",
+	"u9JOpf+qcNW9gnrOtZdS/bVayg0U+nGZrW+KiGzeleljknNt3L0/RPGStwvnCMvzlSdlWf4bAAD//y2p",
+	"e7jFFQAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
