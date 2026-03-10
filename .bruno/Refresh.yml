@@ -1,0 +1,17 @@
+info:
+  name: Refresh
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: "{{BASE_URL}}/refresh"
+  auth:
+    type: bearer
+    token: a3iHe9XRe9owTYbuBcfXMECM30MVkT8F2iM_F2WYqVg
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

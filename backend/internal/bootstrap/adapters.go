@@ -2,22 +2,26 @@ package bootstrap
 
 import (
 	"database/sql"
+	"main/internal/adapters/notifier"
 	"main/internal/adapters/repository"
 	"main/internal/core/ports"
+	"main/internal/smtp"
 
 	"github.com/go-redis/redis/v8"
 )
 
-type Repositories struct {
+type Adapters struct {
 	ports.UserRepository
 	ports.SessionRepository
 	ports.UserIntentRepository
+	ports.UserNotifier
 }
 
-func NewRepositories(db *sql.DB, rdb *redis.Client) *Repositories {
-	return &Repositories{
+func NewAdapters(db *sql.DB, rdb *redis.Client, smtp *smtp.SMTPClient) *Adapters {
+	return &Adapters{
 		UserRepository:       repository.NewUserRepositoryPg(db),
 		SessionRepository:    repository.NewSessionRepositoryRedis(rdb),
 		UserIntentRepository: repository.NewUserIntentRepositoryRedis(rdb),
+		UserNotifier:         notifier.NewUserNotifierSMTP(smtp),
 	}
 }

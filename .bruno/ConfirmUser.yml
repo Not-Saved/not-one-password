@@ -1,0 +1,22 @@
+info:
+  name: ConfirmUser
+  type: http
+  seq: 6
+
+http:
+  method: POST
+  url: "{{BASE_URL}}/user/confirm?code=eVsJYKnQyg2FD2tBoHEW3cnms_1zZetjaWBaue5iNQM"
+  params:
+    - name: code
+      value: eVsJYKnQyg2FD2tBoHEW3cnms_1zZetjaWBaue5iNQM
+      type: query
+  body:
+    type: json
+    data: ""
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

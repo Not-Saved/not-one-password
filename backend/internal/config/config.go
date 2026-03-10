@@ -19,6 +19,14 @@ type RedisConfig struct {
 	Port string
 }
 
+type SMTPConfig struct {
+	Host     string
+	Port     string
+	From     string
+	User     string
+	Password string
+}
+
 func (db DBConfig) ConnString() string {
 	return fmt.Sprintf(
 		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
@@ -29,6 +37,7 @@ func (db DBConfig) ConnString() string {
 type Config struct {
 	DB      DBConfig
 	Redis   RedisConfig
+	SMTP    SMTPConfig
 	AppPort string
 }
 
@@ -44,6 +53,13 @@ func Load() Config {
 		Redis: RedisConfig{
 			Host: mustGetEnv("REDIS_HOST"),
 			Port: mustGetEnv("REDIS_PORT"),
+		},
+		SMTP: SMTPConfig{
+			Host:     mustGetEnv("SMTP_HOST"),
+			Port:     mustGetEnv("SMTP_PORT"),
+			User:     getEnv("SMTP_USER", ""),
+			Password: getEnv("SMTP_PASSWORD", ""),
+			From:     mustGetEnv("SMTP_FROM"),
 		},
 		AppPort: getEnv("APP_PORT", "8080"),
 	}

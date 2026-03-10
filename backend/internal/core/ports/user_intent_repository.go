@@ -7,5 +7,6 @@ import (
 
 type UserIntentRepository interface {
 	CreateRegistrationIntent(ctx context.Context, user domain.RegistrationIntentUser) (*domain.RegistrationIntentToken, error)
-	ConsumeRegistrationIntent(ctx context.Context, code string) (*domain.RegistrationIntentUser, error)
+	GetRegistrationIntent(ctx context.Context, code string) (*domain.RegistrationIntentUser, error)
+	DeleteRegistrationIntent(ctx context.Context, code string) error
 }

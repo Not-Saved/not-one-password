@@ -7,6 +7,7 @@ import (
 	"main/internal/db"
 	"main/internal/redis"
 	"main/internal/server"
+	"main/internal/smtp"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -17,9 +18,10 @@ func main() {
 	dbConn := db.NewDbConnection(cfg.DB.ConnString())
 	defer dbConn.Close()
 	redisConn := redis.NewRedisConnection(cfg.Redis)
+	smtpClient := smtp.NewSMTPclient(cfg.SMTP)
 
-	repos := bootstrap.NewRepositories(dbConn, redisConn)
-	services := bootstrap.NewServices(repos)
+	adapters := bootstrap.NewAdapters(dbConn, redisConn, smtpClient)
+	services := bootstrap.NewServices(adapters)
 	handlers := bootstrap.NewHandlers(services)
 	middlewares := bootstrap.NewMiddlewares(services)
 

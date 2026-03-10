@@ -49,7 +49,7 @@ func (r *UserIntentRepositoryRedis) CreateRegistrationIntent(ctx context.Context
 	}, nil
 }
 
-func (r *UserIntentRepositoryRedis) ConsumeRegistrationIntent(ctx context.Context, code string) (*domain.RegistrationIntentUser, error) {
+func (r *UserIntentRepositoryRedis) GetRegistrationIntent(ctx context.Context, code string) (*domain.RegistrationIntentUser, error) {
 	key := registrationIntentKey(code)
 
 	// Get the JSON value
@@ -61,12 +61,6 @@ func (r *UserIntentRepositoryRedis) ConsumeRegistrationIntent(ctx context.Contex
 		return nil, err
 	}
 
-	// Delete the key to prevent reuse
-	_, err = r.rdb.Del(ctx, key).Result()
-	if err != nil {
-		return nil, fmt.Errorf("failed to delete registration intent: %w", err)
-	}
-
 	// Unmarshal JSON into struct
 	var user domain.RegistrationIntentUser
 	err = json.Unmarshal([]byte(data), &user)
@@ -75,4 +69,13 @@ func (r *UserIntentRepositoryRedis) ConsumeRegistrationIntent(ctx context.Contex
 	}
 
 	return &user, nil
+}
+
+func (r *UserIntentRepositoryRedis) DeleteRegistrationIntent(ctx context.Context, code string) error {
+	key := registrationIntentKey(code)
+	_, err := r.rdb.Del(ctx, key).Result()
+	if err != nil {
+		return fmt.Errorf("failed to delete registration intent: %w", err)
+	}
+	return nil
 }

@@ -15,6 +15,7 @@ services:
     volumes:
       - ./backend:/app
     command: air -c .air.toml
+
   migrate:
     build:
       context: ./backend
@@ -33,6 +34,7 @@ services:
       user=${POSTGRES_USER} password=${POSTGRES_PASSWORD}
       dbname=${POSTGRES_DB} sslmode=disable"
       up
+
   db:
     image: postgres:18-alpine
     container_name: postgres
@@ -50,6 +52,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+
   redis:
     image: redis:8-alpine
     container_name: redis
@@ -63,6 +66,17 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: mailhog
+    environment:
+      SMTP_PORT: ${SMTP_PORT}
+    ports:
+      - "${SMTP_PORT}:1025" # SMTP
+      - "8025:8025" # Web UI
+    restart: always
+
   frontend:
     build:
       context: ./frontend
@@ -77,6 +91,7 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
+
 volumes:
   pgdata:
   redisdata:

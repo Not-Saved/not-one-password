@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/oapi-codegen/runtime"
 	strictnethttp "github.com/oapi-codegen/runtime/strictmiddleware/nethttp"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -26,11 +27,6 @@ const (
 	BearerAuthScopes = "BearerAuth.Scopes"
 	CookieAuthScopes = "CookieAuth.Scopes"
 )
-
-// ConfirmUserRequest defines model for ConfirmUserRequest.
-type ConfirmUserRequest struct {
-	Code string `json:"code"`
-}
 
 // CreateUserRequest defines model for CreateUserRequest.
 type CreateUserRequest struct {
@@ -72,14 +68,17 @@ type BadRequest = ErrorResponse
 // InternalServerError defines model for InternalServerError.
 type InternalServerError = ErrorResponse
 
+// ConfirmUserParams defines parameters for ConfirmUser.
+type ConfirmUserParams struct {
+	// Code Email confirmation code
+	Code string `form:"code" json:"code"`
+}
+
 // IssueTokenJSONRequestBody defines body for IssueToken for application/json ContentType.
 type IssueTokenJSONRequestBody = LoginRequest
 
 // CreateUserJSONRequestBody defines body for CreateUser for application/json ContentType.
 type CreateUserJSONRequestBody = CreateUserRequest
-
-// ConfirmUserJSONRequestBody defines body for ConfirmUser for application/json ContentType.
-type ConfirmUserJSONRequestBody = ConfirmUserRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -100,7 +99,7 @@ type ServerInterface interface {
 	CreateUser(w http.ResponseWriter, r *http.Request)
 	// Create a new user
 	// (POST /user/confirm)
-	ConfirmUser(w http.ResponseWriter, r *http.Request)
+	ConfirmUser(w http.ResponseWriter, r *http.Request, params ConfirmUserParams)
 	// List all users
 	// (GET /users)
 	ListUsers(w http.ResponseWriter, r *http.Request)
@@ -212,8 +211,28 @@ func (siw *ServerInterfaceWrapper) CreateUser(w http.ResponseWriter, r *http.Req
 // ConfirmUser operation middleware
 func (siw *ServerInterfaceWrapper) ConfirmUser(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ConfirmUserParams
+
+	// ------------- Required query parameter "code" -------------
+
+	if paramValue := r.URL.Query().Get("code"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "code"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "code", r.URL.Query(), &params.Code)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "code", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ConfirmUser(w, r)
+		siw.Handler.ConfirmUser(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -592,7 +611,7 @@ func (response CreateUser500JSONResponse) VisitCreateUserResponse(w http.Respons
 }
 
 type ConfirmUserRequestObject struct {
-	Body *ConfirmUserJSONRequestBody
+	Params ConfirmUserParams
 }
 
 type ConfirmUserResponseObject interface {
@@ -844,15 +863,10 @@ func (sh *strictHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 // ConfirmUser operation middleware
-func (sh *strictHandler) ConfirmUser(w http.ResponseWriter, r *http.Request) {
+func (sh *strictHandler) ConfirmUser(w http.ResponseWriter, r *http.Request, params ConfirmUserParams) {
 	var request ConfirmUserRequestObject
 
-	var body ConfirmUserJSONRequestBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ConfirmUser(ctx, request.(ConfirmUserRequestObject))
@@ -901,26 +915,26 @@ func (sh *strictHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/9RYbW/bNhD+KwQ3oBugxc6aDoO+5aXrvGXrECefgmBgpbPFRiKZI+nUM/TfB5K2Xmwp",
-	"dlJnWb7JMnm8u+e5545a0EQWSgoQRtN4QRG0kkKD/3HC0gu4s6CN+5VIYUD4R6ZUzhNmuBSDz1oK9w6+",
-	"sELlEFamQOOj4TCiBWjNpkBj+gfXmospQbizHCElEw55St4IVsAbWkZUJxkUzO3/FmFCY/rNoPZtEP7V",
-	"g/eIEi+WXtKyLCOagk6QK+cNjelIzFjOU8KFssbZHQkDKFg+BpwB+v1PCeddO5yxLMBkLqB7EIbcoxRT",
-	"IgUxGRDtT9prTCGEpWUCPoiyOsCjdSrFhGNxpQEbqCmUCtDwgGgIZUHNXLkgtEEupt7QChYaX4dVN9Fq",
-	"lfz0GRKfylMEZuDBE6BgPHcPE4kFMzRevonWz4yoQ77DmYgqpvW9xLRlpnoZ0YKLcxBTk9H452hLLP6Q",
-	"qHKistIVXhuH3uRV1PCUWFrhwsA0gF6RpLG0B8JoFyRqi11On8spF71wpDDjCYzOwnOTU1eC31kgPAVh",
-	"+IQDkolET98k547SYSv5zmpXrO4/eQuCFEywKRQgzPddoD4C/20wP5yaDUSjOtiuPF067/vB9cFtZumE",
-	"afjpiCAoBA3CeJEgcuITFfZsczSs6nIpFFKfR4/IJG/n0FqePlRwNSt/k5kgZxK2BuENWu0o3KinzaCc",
-	"JEFikZv52EnTspEAQ8Bj6yp2QT/5X7+svJWK3Vln02uZMxYW1D5lxigvP1LecliZ4Q6fxL+iq9jo+P14",
-	"PPr459+js3o7U/x3mAdd5WIiPdzc+AQ4CMjxXyMa0RmgDqAfHgwPhu5AqUAwxWlM3x4MD956tpnMhzTI",
-	"5VTaUHEyVJ4Dz/NjlNLY1aW0xtmnUbut/jg82iRaWE60TRLQemLzKNBLE4SZvAWX/wxYCuhtjMH8ENLR",
-	"UdkqZQZS8qsx6qPI5yQkSdNmP1qH2yXnaHj4tEZ/2OyMPqVCGsKsyZy4JM6bPXbDK+EsS+T/QBoR23vc",
-	"u+Gw76wKj0HXdNBkMY2v2/y9vimjRYuK1zflTUS1LQqG8xrKxCI6HXUOepMDhAmCzvo5cxEWXC51ZY01",
-	"wx3A2S3FbS3sSPHlinreH0gbvMznr4aJq1FQIoEvyg+dy4iW0r3/qfOho16Kj0tWEeYhJEys+aYDO6sO",
-	"2M3NkdYWamb6eeNEpvO9kbI1yJTtBmTQQvk/KAjukvDUalivAj9U9YOyvUZ2oFPjCrf3svIzgGN8NYLt",
-	"v54SBD+gslx/fQlVFeG5vK0evG7HCzqFjmr4AOY06Ht3h98fNVtDYlc3dP0PwSCH2To1X2dPf0mt/ADr",
-	"jTvq0cP6LvxMerh52d5JFA872rBDL/HmugjyaBnZUxWGAAkjAu4bU5J7GiThY0Z/O2p87Xiu/G9+T/mP",
-	"u9JOpf+qcNW9gnrOtZdS/bVayg0U+nGZrW+KiGzeleljknNt3L0/RPGStwvnCMvzlSdlWf4bAAD//y2p",
-	"e7jFFQAA",
+	"H4sIAAAAAAAC/9RXbW/bNhD+KwQ3oBugxc6aDoO+NS/rvGXrECefgmBgpbPNRiKVI+nUM/TfhyNlS7Kl",
+	"OEk9ZPmmF/J4d89zzx2XPNF5oRUoa3i85Aim0MqAfzkW6QXcOTCW3hKtLCj/KIoik4mwUqvBZ6MVfYMv",
+	"Ii8yCCtT4PHRcBjxHIwRU+Ax/0MaI9WUIdw5iZCyiYQsZW+UyOENLyNukhnkgvZ/izDhMf9mUPs2CH/N",
+	"4AxR40XlJS/LMuIpmARlQd7wmI/UXGQyZVIVzpLdkbKASmRjwDmg3/+ccN61wxnrHOyMAroHZdk9ajVl",
+	"WjE7A2b8SXuNKYRQWWbggyjXB3i0ThCEhSsD2ACtQF0AWhkAhVzIjB4mGnNheVx9ibhdFBSVsSjVlDwn",
+	"WGjl1o9CGHOvMW2ZWX+MeC7VOaipnfH45y27ZcRX+PP4OhwSrZ1YW7lZb9SfPkPiYWwnaSu0AFIDN49X",
+	"ZUUqC9OAyBrBxtKe/O7y3h9ZW+xy+lxPpeqFI4W5TGB0Gp6bgF8peeeAyRSUlRMJyCYaPbeSTBLfwlb2",
+	"nTNUSfRP34JiuVBiCjko+30XqE/AfxfMD6dmC9GoDrYrT5fkfT+4PrjtLB0LAz8dMYQCwYCyvoKZnvhE",
+	"hT27HA2rulwKhdTn0RMyKds5dE6mDxVczcrf9EyxUw07g/AGnSEKN+ppOyjSC0gcSrsYk25UKg8CAd87",
+	"qtgl/+Tffll5qwtx58imFxoyFhbUPs2sLcj/E61vJazMSMIn8Z/4KjY+PhuPRx///Ht0Wm8XhfwdFkH0",
+	"pJpoD7e0PgEEAXv/14hHfA5oAuiHB8ODIR2oC1CikDzmbw+GB2892+zMhzTI9FS7UHE6VB6B5/kxSnlM",
+	"damdJfs8ave8H4dH20QLy5lxSQLGTFwWBXoZhjDXt0D5n4FIAb2NMdgfQjo6KrtIhYWU/Wpt8VFlCxaS",
+	"ZHizWWzCTck5Gh4+rwsfNtuWT6nSlglnZyQuCXmzx1Z1pciyRvkPpBFzvce9Gw77zlrjMehq3U0W8/i6",
+	"zd/rmzJatqh4fVPeRNy4PBe4qKFMHCLpKDnoTQ4QJghm1s+Zi7DgstKVDdYMHwHO41Lc1sKOFF+uqOf9",
+	"gbTBy2zxapi4mtM0MvhS+ImwiqiS7v2PhA8d9VJ8rFjFhIeQCbXhmwnsXHfAbm6OjHFQM9PPG8c6XeyN",
+	"lK1Bpmw3IIsOyv9BQUhKwnOrYbMK/FDVD8ruGnkEnRr3q72XlZ8BiPHrEWz/9ZQg+AFVZObrS2hdEZ7L",
+	"u+rB63a85FPoqIYPYE+Cvnd3+P1RszUkdnVD6n8IFiXMN6n5Onv6S2rlB9hs3FGPHtZ34f9ID7cv248S",
+	"xcOONkzoJd5cF0GeLCN7qsIQIBNMwX1jSqKnQaLVRGLe345OwoIq/4VAkYP1Iny9Gf6Z16nKYrjAVfdq",
+	"f4W4c4CL+gZR/Wqn+SEtvnnp4n9VyJpeST2Xxoup+Vo1lRZy87TM1ndFRLHoyvR7lklj6eYfonjJ+wU5",
+	"IrJs5UlZlv8GAAD//42N6/RkFQAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

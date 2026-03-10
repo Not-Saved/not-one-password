@@ -68,12 +68,13 @@ paths:
     post:
       summary: Create a new user
       operationId: confirmUser
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ConfirmUserRequest"
+      parameters:
+        - name: code
+          in: query
+          required: true
+          description: Email confirmation code
+          schema:
+            type: string
       responses:
         "200":
           description: User created successfully

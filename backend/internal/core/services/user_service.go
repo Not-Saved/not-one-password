@@ -12,10 +12,16 @@ type UserService struct {
 	userRepository       ports.UserRepository
 	sessionRepository    ports.SessionRepository
 	userIntentRepository ports.UserIntentRepository
+	userNotifier         ports.UserNotifier
 }
 
-func NewUserService(userRepo ports.UserRepository, userIntentRepo ports.UserIntentRepository, sessionRepo ports.SessionRepository) *UserService {
-	return &UserService{userRepository: userRepo, userIntentRepository: userIntentRepo, sessionRepository: sessionRepo}
+func NewUserService(
+	userRepo ports.UserRepository,
+	userIntentRepo ports.UserIntentRepository,
+	userNotifier ports.UserNotifier,
+	sessionRepo ports.SessionRepository,
+) *UserService {
+	return &UserService{userRepository: userRepo, userIntentRepository: userIntentRepo, userNotifier: userNotifier, sessionRepository: sessionRepo}
 }
 
 func (s *UserService) GetUsers(ctx context.Context) ([]domain.User, error) {
@@ -57,18 +63,31 @@ func (s *UserService) CreateUser(ctx context.Context, name, email, password stri
 		return nil, err
 	}
 
-	//TODO: email
+	err = s.userNotifier.NotifyRegistrationIntent(email, registrationToken.Code)
+	if err != nil {
+		return nil, err
+	}
 
 	return registrationToken, nil
 }
 
 func (s *UserService) ConfirmUser(ctx context.Context, code string) (*domain.User, error) {
-	registrationIntent, err := s.userIntentRepository.ConsumeRegistrationIntent(ctx, code)
+	registrationIntent, err := s.userIntentRepository.GetRegistrationIntent(ctx, code)
 	if err != nil {
 		return nil, err
 	}
 
 	user, err := s.userRepository.CreateUser(ctx, registrationIntent.Name, registrationIntent.Email, registrationIntent.PasswordHash)
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.userIntentRepository.DeleteRegistrationIntent(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.userNotifier.NotifyRegistrationSuccess(user.Email)
 	if err != nil {
 		return nil, err
 	}

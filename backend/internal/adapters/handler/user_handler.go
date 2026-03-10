@@ -84,7 +84,7 @@ func (s *UserHandler) GetCurrentUser(ctx context.Context, request oapi.GetCurren
 }
 
 func (s *UserHandler) ConfirmUser(ctx context.Context, r oapi.ConfirmUserRequestObject) (oapi.ConfirmUserResponseObject, error) {
-	user, err := s.userService.ConfirmUser(ctx, r.Body.Code)
+	user, err := s.userService.ConfirmUser(ctx, r.Params.Code)
 	if err != nil {
 		return oapi.ConfirmUser400JSONResponse{
 			BadRequestJSONResponse: oapi.BadRequestJSONResponse{
