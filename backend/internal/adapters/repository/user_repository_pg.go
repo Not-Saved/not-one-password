@@ -6,6 +6,8 @@ import (
 	"errors"
 	"main/internal/core/domain"
 	db "main/internal/db/sqlc"
+	"main/internal/utils"
+	"strconv"
 
 	"github.com/google/uuid"
 )
@@ -65,6 +67,24 @@ func (r *UserRepositoryPg) GetUserByPublicID(ctx context.Context, id string) (*d
 	return u, nil
 }
 
+func (r *UserRepositoryPg) GetUserByID(ctx context.Context, id string) (*domain.User, error) {
+	iid, err := utils.Int32FromString(id)
+	if err != nil {
+		return nil, err
+	}
+
+	dbUser, err := r.queries.GetUserByID(ctx, iid)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	u := toDomainUser(dbUser)
+	return u, nil
+}
+
 func (r *UserRepositoryPg) CreateUser(ctx context.Context, name, email, passwordHash string) (*domain.User, error) {
 	dbUser, err := r.queries.CreateUser(ctx, db.CreateUserParams{
 		Name:         name,
@@ -79,6 +99,7 @@ func (r *UserRepositoryPg) CreateUser(ctx context.Context, name, email, password
 
 func toDomainUser(u db.User) *domain.User {
 	return &domain.User{
+		ID:           strconv.FormatInt(int64(u.ID), 10),
 		PublicID:     u.PublicID,
 		Name:         u.Name,
 		Email:        u.Email,

@@ -5,6 +5,7 @@
 package db
 
 import (
+	"database/sql"
 	"time"
 
 	"github.com/google/uuid"
@@ -18,4 +19,11 @@ type User struct {
 	PasswordHash string
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
+}
+
+type Vault struct {
+	UserID    int32
+	Vault     []byte
+	CreatedAt sql.NullTime
+	UpdatedAt sql.NullTime
 }

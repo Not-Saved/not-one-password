@@ -7,6 +7,7 @@ import (
 )
 
 type User struct {
+	ID           string
 	PublicID     uuid.UUID
 	Name         string
 	Email        string

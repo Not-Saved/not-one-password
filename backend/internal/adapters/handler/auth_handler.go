@@ -40,13 +40,10 @@ func (h *AuthHandler) IssueToken(ctx context.Context, request oapi.IssueTokenReq
 
 func (h *AuthHandler) RefreshToken(ctx context.Context, request oapi.RefreshTokenRequestObject) (oapi.RefreshTokenResponseObject, error) {
 	tokenResponse, ok := middleware.GetTokenResponse(ctx)
-
-	if !ok {
-		return &oapi.RefreshToken500JSONResponse{
-			InternalServerErrorJSONResponse: oapi.InternalServerErrorJSONResponse{
-				Code:    500,
-				Message: "Internal Server Error",
-			},
+	if !ok || tokenResponse == nil {
+		return &oapi.RefreshToken401JSONResponse{
+			Code:    401,
+			Message: "Unauthorized",
 		}, nil
 	}
 
@@ -71,12 +68,13 @@ func (h *AuthHandler) RefreshToken(ctx context.Context, request oapi.RefreshToke
 
 func (h *AuthHandler) LogoutUser(ctx context.Context, r oapi.LogoutUserRequestObject) (oapi.LogoutUserResponseObject, error) {
 	session, ok := middleware.GetAccessSession(ctx)
-	if !ok {
+	if !ok || session == nil {
 		return oapi.LogoutUser401JSONResponse{
 			Code:    401,
 			Message: "Unauthorized",
 		}, nil
 	}
+
 	err := h.authService.Logout(ctx, session.UserID, session.DeviceID)
 	if err != nil {
 		return oapi.LogoutUser500JSONResponse{

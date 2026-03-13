@@ -12,6 +12,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"path"
@@ -100,6 +101,12 @@ type ServerInterface interface {
 	// Create a new user
 	// (POST /user/confirm)
 	ConfirmUser(w http.ResponseWriter, r *http.Request, params ConfirmUserParams)
+	// Get current user's vault
+	// (GET /user/vault)
+	GetUserVault(w http.ResponseWriter, r *http.Request)
+	// Create or update current user's vault
+	// (POST /user/vault)
+	InsertUserVault(w http.ResponseWriter, r *http.Request)
 	// List all users
 	// (GET /users)
 	ListUsers(w http.ResponseWriter, r *http.Request)
@@ -233,6 +240,50 @@ func (siw *ServerInterfaceWrapper) ConfirmUser(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ConfirmUser(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetUserVault operation middleware
+func (siw *ServerInterfaceWrapper) GetUserVault(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetUserVault(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// InsertUserVault operation middleware
+func (siw *ServerInterfaceWrapper) InsertUserVault(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.InsertUserVault(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -390,6 +441,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/user", wrapper.GetCurrentUser)
 	m.HandleFunc("POST "+options.BaseURL+"/user", wrapper.CreateUser)
 	m.HandleFunc("POST "+options.BaseURL+"/user/confirm", wrapper.ConfirmUser)
+	m.HandleFunc("GET "+options.BaseURL+"/user/vault", wrapper.GetUserVault)
+	m.HandleFunc("POST "+options.BaseURL+"/user/vault", wrapper.InsertUserVault)
 	m.HandleFunc("GET "+options.BaseURL+"/users", wrapper.ListUsers)
 
 	return m
@@ -647,6 +700,97 @@ func (response ConfirmUser500JSONResponse) VisitConfirmUserResponse(w http.Respo
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetUserVaultRequestObject struct {
+}
+
+type GetUserVaultResponseObject interface {
+	VisitGetUserVaultResponse(w http.ResponseWriter) error
+}
+
+type GetUserVault200ApplicationoctetStreamResponse struct {
+	Body          io.Reader
+	ContentLength int64
+}
+
+func (response GetUserVault200ApplicationoctetStreamResponse) VisitGetUserVaultResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/octet-stream")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetUserVault401JSONResponse ErrorResponse
+
+func (response GetUserVault401JSONResponse) VisitGetUserVaultResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetUserVault404JSONResponse ErrorResponse
+
+func (response GetUserVault404JSONResponse) VisitGetUserVaultResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetUserVault500JSONResponse struct {
+	InternalServerErrorJSONResponse
+}
+
+func (response GetUserVault500JSONResponse) VisitGetUserVaultResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type InsertUserVaultRequestObject struct {
+	Body io.Reader
+}
+
+type InsertUserVaultResponseObject interface {
+	VisitInsertUserVaultResponse(w http.ResponseWriter) error
+}
+
+type InsertUserVault204Response struct {
+}
+
+func (response InsertUserVault204Response) VisitInsertUserVaultResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type InsertUserVault401JSONResponse ErrorResponse
+
+func (response InsertUserVault401JSONResponse) VisitInsertUserVaultResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type InsertUserVault500JSONResponse struct {
+	InternalServerErrorJSONResponse
+}
+
+func (response InsertUserVault500JSONResponse) VisitInsertUserVaultResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ListUsersRequestObject struct {
 }
 
@@ -694,6 +838,12 @@ type StrictServerInterface interface {
 	// Create a new user
 	// (POST /user/confirm)
 	ConfirmUser(ctx context.Context, request ConfirmUserRequestObject) (ConfirmUserResponseObject, error)
+	// Get current user's vault
+	// (GET /user/vault)
+	GetUserVault(ctx context.Context, request GetUserVaultRequestObject) (GetUserVaultResponseObject, error)
+	// Create or update current user's vault
+	// (POST /user/vault)
+	InsertUserVault(ctx context.Context, request InsertUserVaultRequestObject) (InsertUserVaultResponseObject, error)
 	// List all users
 	// (GET /users)
 	ListUsers(ctx context.Context, request ListUsersRequestObject) (ListUsersResponseObject, error)
@@ -888,6 +1038,56 @@ func (sh *strictHandler) ConfirmUser(w http.ResponseWriter, r *http.Request, par
 	}
 }
 
+// GetUserVault operation middleware
+func (sh *strictHandler) GetUserVault(w http.ResponseWriter, r *http.Request) {
+	var request GetUserVaultRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetUserVault(ctx, request.(GetUserVaultRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetUserVault")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetUserVaultResponseObject); ok {
+		if err := validResponse.VisitGetUserVaultResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// InsertUserVault operation middleware
+func (sh *strictHandler) InsertUserVault(w http.ResponseWriter, r *http.Request) {
+	var request InsertUserVaultRequestObject
+
+	request.Body = r.Body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.InsertUserVault(ctx, request.(InsertUserVaultRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "InsertUserVault")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(InsertUserVaultResponseObject); ok {
+		if err := validResponse.VisitInsertUserVaultResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListUsers operation middleware
 func (sh *strictHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	var request ListUsersRequestObject
@@ -915,26 +1115,28 @@ func (sh *strictHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/9RXbW/bNhD+KwQ3oBugxc6aDoO+NS/rvGXrECefgmBgpbPNRiKVI+nUM/TfhyNlS7Kl",
-	"OEk9ZPmmF/J4d89zzx2XPNF5oRUoa3i85Aim0MqAfzkW6QXcOTCW3hKtLCj/KIoik4mwUqvBZ6MVfYMv",
-	"Ii8yCCtT4PHRcBjxHIwRU+Ax/0MaI9WUIdw5iZCyiYQsZW+UyOENLyNukhnkgvZ/izDhMf9mUPs2CH/N",
-	"4AxR40XlJS/LMuIpmARlQd7wmI/UXGQyZVIVzpLdkbKASmRjwDmg3/+ccN61wxnrHOyMAroHZdk9ajVl",
-	"WjE7A2b8SXuNKYRQWWbggyjXB3i0ThCEhSsD2ACtQF0AWhkAhVzIjB4mGnNheVx9ibhdFBSVsSjVlDwn",
-	"WGjl1o9CGHOvMW2ZWX+MeC7VOaipnfH45y27ZcRX+PP4OhwSrZ1YW7lZb9SfPkPiYWwnaSu0AFIDN49X",
-	"ZUUqC9OAyBrBxtKe/O7y3h9ZW+xy+lxPpeqFI4W5TGB0Gp6bgF8peeeAyRSUlRMJyCYaPbeSTBLfwlb2",
-	"nTNUSfRP34JiuVBiCjko+30XqE/AfxfMD6dmC9GoDrYrT5fkfT+4PrjtLB0LAz8dMYQCwYCyvoKZnvhE",
-	"hT27HA2rulwKhdTn0RMyKds5dE6mDxVczcrf9EyxUw07g/AGnSEKN+ppOyjSC0gcSrsYk25UKg8CAd87",
-	"qtgl/+Tffll5qwtx58imFxoyFhbUPs2sLcj/E61vJazMSMIn8Z/4KjY+PhuPRx///Ht0Wm8XhfwdFkH0",
-	"pJpoD7e0PgEEAXv/14hHfA5oAuiHB8ODIR2oC1CikDzmbw+GB2892+zMhzTI9FS7UHE6VB6B5/kxSnlM",
-	"damdJfs8ave8H4dH20QLy5lxSQLGTFwWBXoZhjDXt0D5n4FIAb2NMdgfQjo6KrtIhYWU/Wpt8VFlCxaS",
-	"ZHizWWzCTck5Gh4+rwsfNtuWT6nSlglnZyQuCXmzx1Z1pciyRvkPpBFzvce9Gw77zlrjMehq3U0W8/i6",
-	"zd/rmzJatqh4fVPeRNy4PBe4qKFMHCLpKDnoTQ4QJghm1s+Zi7DgstKVDdYMHwHO41Lc1sKOFF+uqOf9",
-	"gbTBy2zxapi4mtM0MvhS+ImwiqiS7v2PhA8d9VJ8rFjFhIeQCbXhmwnsXHfAbm6OjHFQM9PPG8c6XeyN",
-	"lK1Bpmw3IIsOyv9BQUhKwnOrYbMK/FDVD8ruGnkEnRr3q72XlZ8BiPHrEWz/9ZQg+AFVZObrS2hdEZ7L",
-	"u+rB63a85FPoqIYPYE+Cvnd3+P1RszUkdnVD6n8IFiXMN6n5Onv6S2rlB9hs3FGPHtZ34f9ID7cv248S",
-	"xcOONkzoJd5cF0GeLCN7qsIQIBNMwX1jSqKnQaLVRGLe345OwoIq/4VAkYP1Iny9Gf6Z16nKYrjAVfdq",
-	"f4W4c4CL+gZR/Wqn+SEtvnnp4n9VyJpeST2Xxoup+Vo1lRZy87TM1ndFRLHoyvR7lklj6eYfonjJ+wU5",
-	"IrJs5UlZlv8GAAD//42N6/RkFQAA",
+	"H4sIAAAAAAAC/9RY227jNhD9FYItsC2gjZ1utij0llu3btNuESd9CYKCkUY2NxKpDEln3UD/XnAoX2RL",
+	"cS5uk7zJEjmcmXPmzNB3PNFFqRUoa3h8xxFMqZUB+nEg0lO4cWCs/5VoZUHRoyjLXCbCSq16X4xW/h18",
+	"FUWZQ1iZAo/3+v2IF2CMGAGP+e/SGKlGDOHGSYSUZRLylL1TooB3vIq4ScZQCL//W4SMx/yb3sK3Xvhq",
+	"eseIGk9rL3lVVRFPwSQoS+8Nj/lATUQuUyZV6ay3O1AWUIl8CDgBpP1PCedjM5yhLsCOfUC3oCy7Ra1G",
+	"TCtmx8AMnbTVmEIItWUGFEQ1P4DQOkQQFs4N4BJoJeoS0MoAKBRC5v4h01gIy+P6TcTttPRRGYtSjbzn",
+	"Hha/cu1DKYy51Zg2zMxfRryQ6gTUyI55/NOa3SriM/x5fBEOieZOzK1czjfqqy+QEIzNJK2FFkBawo3w",
+	"qq1IZWEUEJkjuLS0I7+bvKcjFxbbnD7RI6k64UhhIhMYHIXnZcDPlbxxwGQKyspMArJMI3EryaXnW9jK",
+	"vnPGV5L/pq9BsUIoMYIClP2+DdRH4L8J5vtTs4ZotAi2LU9n3vtucCm49SwdCAM/7jGEEsGAslTBTGeU",
+	"qLBnk6NhVZtLoZC6PHpEJmUzh87J9L6CW7DyVz1W7EjDxiDIoDOewkv1tB6U1wtIHEo7HXrdqFUeBALu",
+	"O1+xd/yKfv0881aX4sZ5myQ03lhYsPBpbG3p/T/U+lrCzIz0+CT0is9i48Pj4XDw+Y+/B0eL7aKUv8E0",
+	"iJ5UmSa4paUEeAjY/p8DHvEJoAmg7+70d/r+QF2CEqXkMf+w09/5QGyzYwqpl+uRdqHidKg8Dx7xY5Dy",
+	"2Neldtbb51Gz5/3Q31snWljOjEsSMCZzeRToZRjCRF+Dz/8YRApINoZg34d0tFR2mQoLKfvF2vKzyqcs",
+	"JMnw5WaxCrdPzl5/92ldeHe5bVFKlbZMODv24pJ4b7bYqs6Vt6xR/gNpxFzncR/7/a6z5nj02lr3Mot5",
+	"fNHk78VlFd01qHhxWV1G3LiiEDhdQJk4RK+j3kEy2UPIEMy4mzOnYcFZrSsrrOk/AJyHpbiphS0pPptR",
+	"j/yBdImX+fTNMHE2p2lk8LWkibCOqJbu7Y+E9x31UnysWcUEQciEWvHNBHbOO2A7NwfGOFgwk+aNA51O",
+	"t0bKxiBTNRuQRQfVKygI6ZPw1GpYrQIaqrpB2VwjD6DT0v1q62VFM4Bn/HwE2349JQg0oIrcPL+E5hVB",
+	"XN5UD6Tb8R0fQUs1fAJ7GPS9vcNvj5qNIbGtG/r+h2BRwmSVmm+zp7+kVn6C1cYddejh4i78H+nh+mX7",
+	"QaK429KGPXoJmWsjyKNlZEtVGAJkgim4XZqS/FMv0SqTWHS3o8OwoM5/KVAUYEmEL1bDPyadqi2GC1x9",
+	"r6YrxI0DnC5uEPWnZprv0+LLly7+t4XsRLjc3qerPqa/aNGjEqsTC/a9sQiiaCZ4fi++kkoQ1GvtdDWv",
+	"dP6zVXVb2tgpvnvhJvn/uBFy4v3ItFOvSqXfGRZo1anWA2UAV6j1EMl+Jqs2iXXLHwEhzcZqfL28eync",
+	"a13RyBzdLDtIMNMa0ykzJ9IQGcxzJzdpoTCPU/HF/1KIYtqW+H2WS2OZzliI4iX/y/COiDyfeVJV1b8B",
+	"AAD//8SwEjXQGQAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

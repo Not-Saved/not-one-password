@@ -40,6 +40,18 @@ func (s *UserService) GetUserByPublicID(ctx context.Context, id string) (*domain
 	return user, nil
 }
 
+func (s *UserService) GetUserByID(ctx context.Context, id string) (*domain.User, error) {
+	user, err := s.userRepository.GetUserByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
+		return nil, fmt.Errorf("User doesn't exist")
+	}
+
+	return user, nil
+}
+
 func (s *UserService) CreateUser(ctx context.Context, name, email, password string) (*domain.RegistrationIntentToken, error) {
 	existingUser, err := s.userRepository.GetUserByEmail(ctx, email)
 	if err != nil {

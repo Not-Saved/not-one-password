@@ -54,22 +54,14 @@ func (h *UserHandler) CreateUser(ctx context.Context, request oapi.CreateUserReq
 
 func (s *UserHandler) GetCurrentUser(ctx context.Context, request oapi.GetCurrentUserRequestObject) (oapi.GetCurrentUserResponseObject, error) {
 	session, ok := middleware.GetAccessSession(ctx)
-
-	if !ok {
-		return &oapi.GetCurrentUser500JSONResponse{
-			InternalServerErrorJSONResponse: oapi.InternalServerErrorJSONResponse{
-				Code:    500,
-				Message: "Internal Server Error",
-			},
-		}, nil
-	}
-	if session == nil {
+	if !ok || session == nil {
 		return oapi.GetCurrentUser401JSONResponse{
 			Code:    401,
 			Message: "Unauthorized",
 		}, nil
 	}
-	user, err := s.userService.GetUserByPublicID(ctx, session.UserID)
+
+	user, err := s.userService.GetUserByID(ctx, session.UserID)
 	if err != nil {
 		return &oapi.GetCurrentUser500JSONResponse{
 			InternalServerErrorJSONResponse: oapi.InternalServerErrorJSONResponse{

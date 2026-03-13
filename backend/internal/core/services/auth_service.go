@@ -31,13 +31,13 @@ func (s *AuthService) CreateToken(ctx context.Context, email, password, deviceID
 		return nil, nil, nil, fmt.Errorf("Invalid email or password")
 	}
 
-	userPublicID := user.PublicID.String()
-	accessSession, err := s.sessionRepository.NewAccessToken(ctx, userPublicID, deviceID)
+	userID := user.ID
+	accessSession, err := s.sessionRepository.NewAccessToken(ctx, userID, deviceID)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	refreshSession, err := s.sessionRepository.NewRefreshToken(ctx, userPublicID, deviceID)
+	refreshSession, err := s.sessionRepository.NewRefreshToken(ctx, userID, deviceID)
 	if err != nil {
 		return nil, nil, nil, err
 	}
