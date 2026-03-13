@@ -11,7 +11,7 @@ http:
       value: application/octet-stream
   body:
     type: text
-    data: My test vault data 12345!
+    data: My test vault data 12344!
   auth: inherit
 
 settings:

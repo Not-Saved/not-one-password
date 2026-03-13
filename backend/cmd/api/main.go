@@ -17,6 +17,9 @@ func main() {
 
 	dbConn := db.NewDbConnection(cfg.DB.ConnString())
 	defer dbConn.Close()
+
+	db.MigrateDB(dbConn)
+
 	redisConn := redis.NewRedisConnection(cfg.Redis)
 	smtpClient := smtp.NewSMTPclient(cfg.SMTP)
 

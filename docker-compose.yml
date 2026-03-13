@@ -10,30 +10,30 @@ services:
     env_file:
       - .env
     depends_on:
-      migrate:
-        condition: service_completed_successfully
+      db:
+        condition: service_healthy
     volumes:
       - ./backend:/app
     command: air -c .air.toml
 
-  migrate:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile.dev
-    depends_on:
-      db:
-        condition: service_healthy
-    env_file:
-      - .env
-    volumes:
-      - ./backend:/app
-    working_dir: /app
-    command: >
-      go tool goose -dir internal/db/migrations postgres
-      "host=${POSTGRES_HOST} port=${POSTGRES_PORT}
-      user=${POSTGRES_USER} password=${POSTGRES_PASSWORD}
-      dbname=${POSTGRES_DB} sslmode=disable"
-      up
+  # migrate:
+  #   build:
+  #     context: ./backend
+  #     dockerfile: Dockerfile.dev
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+  #   env_file:
+  #     - .env
+  #   volumes:
+  #     - ./backend:/app
+  #   working_dir: /app
+  #   command: >
+  #     go tool goose -dir internal/db/migrations postgres
+  #     "host=${POSTGRES_HOST} port=${POSTGRES_PORT}
+  #     user=${POSTGRES_USER} password=${POSTGRES_PASSWORD}
+  #     dbname=${POSTGRES_DB} sslmode=disable"
+  #     up
 
   db:
     image: postgres:18-alpine

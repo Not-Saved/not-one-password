@@ -6,9 +6,6 @@ info:
 http:
   method: GET
   url: "{{BASE_URL}}/user"
-  auth:
-    type: bearer
-    token: eyJhY2Nlc3NUb2tlbiI6Ikx3bS0yNVZzZmp2bEQ5Z2h3TElBUjVVTG9yOWtPOFV6YkdJR1VETUNOdkUiLCJleHBpcmVzSW4iOjb0p
 
 settings:
   encodeUrl: true
