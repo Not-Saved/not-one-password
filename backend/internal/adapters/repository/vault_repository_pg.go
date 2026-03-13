@@ -7,6 +7,7 @@ import (
 	"main/internal/core/domain"
 	db "main/internal/db/sqlc"
 	"main/internal/utils"
+	"time"
 )
 
 type VaultRepositoryPg struct {
@@ -35,6 +36,23 @@ func (r *VaultRepositoryPg) GetVaultByUserID(ctx context.Context, userID string)
 
 	v := toDomainVault(dbVault)
 	return v, nil
+}
+
+func (r *VaultRepositoryPg) GetVaultUpdatedAtByUserID(ctx context.Context, userID string) (*time.Time, error) {
+	id, err := utils.Int32FromString(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	dbVault, err := r.queries.GetVaultUpdatedAtByUserID(ctx, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return &dbVault.Time, nil
 }
 
 func (r *VaultRepositoryPg) InsertVaultByUserID(

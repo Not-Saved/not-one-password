@@ -245,6 +245,42 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
+  /user/vault/poll:
+    get:
+      summary: Get current user's vault
+      operationId: pollUserVault
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      responses:
+        "200":
+          description: Vault retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - updatedAt
+                properties:
+                  updatedAt:
+                    type: integer
+                    format: int64
+                    description: Unix epoch timestamp (seconds since 1970-01-01T00:00:00Z)
+                    example: 1678698245
+        "401":
+          description: User not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Vault not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 components:
   securitySchemes:
     BearerAuth:

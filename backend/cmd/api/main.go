@@ -21,6 +21,8 @@ func main() {
 	db.MigrateDB(dbConn)
 
 	redisConn := redis.NewRedisConnection(cfg.Redis)
+	defer redisConn.Close()
+
 	smtpClient := smtp.NewSMTPclient(cfg.SMTP)
 
 	adapters := bootstrap.NewAdapters(dbConn, redisConn, smtpClient)

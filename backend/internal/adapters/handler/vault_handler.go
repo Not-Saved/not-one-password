@@ -29,13 +29,18 @@ func (h *VaultHandler) GetUserVault(ctx context.Context, request oapi.GetUserVau
 	}
 
 	vault, err := h.vaultService.GetVaultByUserID(ctx, access.UserID)
-
 	if err != nil {
 		return oapi.GetUserVault500JSONResponse{
 			InternalServerErrorJSONResponse: oapi.InternalServerErrorJSONResponse{
 				Code:    500,
 				Message: err.Error(),
 			},
+		}, nil
+	}
+	if vault == nil {
+		return oapi.GetUserVault404JSONResponse{
+			Code:    404,
+			Message: "Vault not found",
 		}, nil
 	}
 
@@ -65,6 +70,37 @@ func (h *VaultHandler) GetUserVault(ctx context.Context, request oapi.GetUserVau
 
 		return nil
 	}), nil
+}
+
+func (h *VaultHandler) PollUserVault(ctx context.Context, request oapi.PollUserVaultRequestObject) (oapi.PollUserVaultResponseObject, error) {
+	access, ok := middleware.GetAccessSession(ctx)
+	if !ok || access == nil {
+		return oapi.PollUserVault401JSONResponse{
+			Code:    401,
+			Message: "User not authenticated",
+		}, nil
+	}
+
+	vaultUpdateAt, err := h.vaultService.GetVaultUpdatedAtByUserID(ctx, access.UserID)
+
+	if err != nil {
+		return oapi.PollUserVault500JSONResponse{
+			InternalServerErrorJSONResponse: oapi.InternalServerErrorJSONResponse{
+				Code:    500,
+				Message: err.Error(),
+			},
+		}, nil
+	}
+	if vaultUpdateAt == nil {
+		return oapi.PollUserVault404JSONResponse{
+			Code:    404,
+			Message: "Vault not found",
+		}, nil
+	}
+
+	return oapi.PollUserVault200JSONResponse{
+		UpdatedAt: vaultUpdateAt.Unix(),
+	}, nil
 }
 
 func (h *VaultHandler) InsertUserVault(ctx context.Context, request oapi.InsertUserVaultRequestObject) (oapi.InsertUserVaultResponseObject, error) {

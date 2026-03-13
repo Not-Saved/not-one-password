@@ -109,6 +109,9 @@ type ServerInterface interface {
 	// Create or update current user's vault
 	// (POST /user/vault)
 	InsertUserVault(w http.ResponseWriter, r *http.Request)
+	// Get current user's vault
+	// (GET /user/vault/poll)
+	PollUserVault(w http.ResponseWriter, r *http.Request)
 	// List all users
 	// (GET /users)
 	ListUsers(w http.ResponseWriter, r *http.Request)
@@ -295,6 +298,28 @@ func (siw *ServerInterfaceWrapper) InsertUserVault(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// PollUserVault operation middleware
+func (siw *ServerInterfaceWrapper) PollUserVault(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PollUserVault(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListUsers operation middleware
 func (siw *ServerInterfaceWrapper) ListUsers(w http.ResponseWriter, r *http.Request) {
 
@@ -445,6 +470,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("POST "+options.BaseURL+"/user/confirm", wrapper.ConfirmUser)
 	m.HandleFunc("GET "+options.BaseURL+"/user/vault", wrapper.GetUserVault)
 	m.HandleFunc("POST "+options.BaseURL+"/user/vault", wrapper.InsertUserVault)
+	m.HandleFunc("GET "+options.BaseURL+"/user/vault/poll", wrapper.PollUserVault)
 	m.HandleFunc("GET "+options.BaseURL+"/users", wrapper.ListUsers)
 
 	return m
@@ -804,6 +830,54 @@ func (response InsertUserVault500JSONResponse) VisitInsertUserVaultResponse(w ht
 	return json.NewEncoder(w).Encode(response)
 }
 
+type PollUserVaultRequestObject struct {
+}
+
+type PollUserVaultResponseObject interface {
+	VisitPollUserVaultResponse(w http.ResponseWriter) error
+}
+
+type PollUserVault200JSONResponse struct {
+	// UpdatedAt Unix epoch timestamp (seconds since 1970-01-01T00:00:00Z)
+	UpdatedAt int64 `json:"updatedAt"`
+}
+
+func (response PollUserVault200JSONResponse) VisitPollUserVaultResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PollUserVault401JSONResponse ErrorResponse
+
+func (response PollUserVault401JSONResponse) VisitPollUserVaultResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PollUserVault404JSONResponse ErrorResponse
+
+func (response PollUserVault404JSONResponse) VisitPollUserVaultResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PollUserVault500JSONResponse struct {
+	InternalServerErrorJSONResponse
+}
+
+func (response PollUserVault500JSONResponse) VisitPollUserVaultResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ListUsersRequestObject struct {
 }
 
@@ -857,6 +931,9 @@ type StrictServerInterface interface {
 	// Create or update current user's vault
 	// (POST /user/vault)
 	InsertUserVault(ctx context.Context, request InsertUserVaultRequestObject) (InsertUserVaultResponseObject, error)
+	// Get current user's vault
+	// (GET /user/vault/poll)
+	PollUserVault(ctx context.Context, request PollUserVaultRequestObject) (PollUserVaultResponseObject, error)
 	// List all users
 	// (GET /users)
 	ListUsers(ctx context.Context, request ListUsersRequestObject) (ListUsersResponseObject, error)
@@ -1101,6 +1178,30 @@ func (sh *strictHandler) InsertUserVault(w http.ResponseWriter, r *http.Request)
 	}
 }
 
+// PollUserVault operation middleware
+func (sh *strictHandler) PollUserVault(w http.ResponseWriter, r *http.Request) {
+	var request PollUserVaultRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PollUserVault(ctx, request.(PollUserVaultRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PollUserVault")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PollUserVaultResponseObject); ok {
+		if err := validResponse.VisitPollUserVaultResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListUsers operation middleware
 func (sh *strictHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	var request ListUsersRequestObject
@@ -1128,30 +1229,30 @@ func (sh *strictHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/9RYUW/bNhD+KwQ3oC2gxHLrpq3f0rTrvHXrUKd7WBAMrHS22Uqkcjw68QL994GkLFu2",
-	"FCett7SAH2SJOt7d9913R13zROeFVqDI8OE1RzCFVgb8n5cifQ8XFgy5f4lWBMpfiqLIZCJIatX7ZLRy",
-	"9+BK5EUGYWUKfDiI44jnYIyYAh/y36QxUk0ZwoWVCCmbSMhS9kCJHB7wMuImmUEu3Ps/Ikz4kP/QW/nW",
-	"C09N7zWixveVl7wsy4inYBKUhfOGD/lIzUUmUyZVYcnZHSkCVCIbA84B/ftfEs7TZjhjnQPNXECXoIhd",
-	"olZTphWjGTDjd9prTCGEyjIDH0RZb+DROkEQBB8M4BpoBeoCkGQAFHIhM3cx0ZgL4sPqTsRpUbioDKFU",
-	"U+e5g8Wt3HpQCGMuNaYNM/XNiOdSvQU1pRkfPt+yW0Z8iT8fnoVNotqJ2sp5/aL++AkSD2MzSVuhBZDW",
-	"cPN4VVakIpgGRGoE15Z25HeX937LlcU2p9/qqVSdcKQwlwmMXoXrdcA/KHlhgckUFMmJBGQTjZ5bSSYd",
-	"38Kr7KE1rpLcM/0ZFMuFElPIQdGjNlDvgP8umG9OzRai0SrYtjydOu+7wfXBbWfppTBwNGAIBYIBRb6C",
-	"mZ74RIV3djkaVrW5FAqpy6M7ZFI2c2itTG8quBUrf9EzxV5p2BmEN2iNo/BaPW0H5fQCEouSFmOnG5XK",
-	"g0DAY+sq9pp/9P9+WnqrC3FhnU0vNM5YWLDyaUZUOP9PtP4sYWlGOnwSf4svY+Pj1+Px6N3vf49erV4X",
-	"hfwVFkH0pJpoD7cknwAHATv+Y8QjPgc0AfT+YXwYuw11AUoUkg/5k8P48IlnG818SL1MT7UNFadD5Tnw",
-	"PD9GKR+6utSWnH0eNXve43iwTbSwnBmbJGDMxGZRoJdhCHP9GVz+ZyBSQG9jDHQQ0tFS2UUqCFL2M1Hx",
-	"TmULFpJk+Hqz2ITbJWcQ97+sC/fX25ZPqdLEhKWZE5fEebPHVvVBOcsa5T+QRsx2bvc0jrv2qvHotbXu",
-	"dRbz4VmTv2fnZXTdoOLZeXkecWPzXOBiBWViEZ2OOge9yR7CBMHMujnzPiw4rXRlgzXxLcC5XYqbWtiS",
-	"4tMl9bw/kK7xMlt8N0xczmkaGVwVfiKsIqqke/8j4U1b3RcfK1Yx4SFkQm34ZgI76w7Yzs2RMRZWzPTz",
-	"xkudLvZGysYgUzYbEKGF8hsoCOmS8KXVsFkFfqjqBmV3jdyCTmvnq72XlZ8BHOPrEWz/9ZQg+AFVZObr",
-	"S6iuCM/lXfXgdXt4zafQUg1vgE6Cvrd3+P1RszEktnVD1/8QCCXMN6n5ffb0+9TKN7DZuKMOPVydhf8j",
-	"Pdw+bN9KFPstbdihl3hzbQS5s4zsqQpDgEwwBZdrU5K76iVaTSTm3e3oJCyo8l8IFDmQF+GzzfBfe52q",
-	"LIYDXHWu9keICwu4WJ0gqkfNNN+kxef3XfzfF7JzYTO6SVddTH/6RTsTm9uMZCGQerm8clhdNxSpeZ62",
-	"YRg9ptZvIVcMCp3MGMkcDIm8YA8NJFqlhhmpEmD9F8/ig7h/EPdP43jof389cifhpXT2j549P3rx/PHg",
-	"abQ6iktFRwPe9pWozsPGoDFzjYmsyJhfwT5KJTw/a5v1ne0j+/ZpvGnd5/Wru8W+NL+zqQzCCfn/cSPk",
-	"xPkx0VZ9U93ngQkk6O5CI2UAN0rmNq1IJwR0YAhB5M1c7qbZLZpQyweOkGZDGr9d3t0X7pVeamRBpDpI",
-	"sNRQ0ymfb6XxZDBfO5FKgtzcrTutvrchikVb4o9ZJg0xPWEhivv8RuMcEVm29KQsy38DAAD//w1OLUKo",
-	"GgAA",
+	"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",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

@@ -3,6 +3,11 @@ SELECT *
 FROM vaults
 WHERE user_id = $1;
 
+-- name: GetVaultUpdatedAtByUserID :one
+SELECT updated_at
+FROM vaults
+WHERE user_id=$1;
+
 -- name: InsertVaultByUserID :one
 INSERT INTO vaults (user_id, vault)
 VALUES ($1, $2)

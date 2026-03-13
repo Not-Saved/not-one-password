@@ -10,6 +10,9 @@ CREATE TABLE vaults (
           REFERENCES users(id)
           ON DELETE CASCADE
 );
+
+CREATE INDEX idx_vaults_user_updated
+ON vaults (user_id, updated_at);
 -- +goose StatementEnd
 
 -- +goose Down

@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 )
 
 const getVaultByUserID = `-- name: GetVaultByUserID :one
@@ -25,6 +26,19 @@ func (q *Queries) GetVaultByUserID(ctx context.Context, userID int32) (Vault, er
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const getVaultUpdatedAtByUserID = `-- name: GetVaultUpdatedAtByUserID :one
+SELECT updated_at
+FROM vaults
+WHERE user_id=$1
+`
+
+func (q *Queries) GetVaultUpdatedAtByUserID(ctx context.Context, userID int32) (sql.NullTime, error) {
+	row := q.db.QueryRowContext(ctx, getVaultUpdatedAtByUserID, userID)
+	var updated_at sql.NullTime
+	err := row.Scan(&updated_at)
+	return updated_at, err
 }
 
 const insertVaultByUserID = `-- name: InsertVaultByUserID :one
