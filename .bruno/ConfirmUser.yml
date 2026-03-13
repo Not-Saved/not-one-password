@@ -5,10 +5,10 @@ info:
 
 http:
   method: POST
-  url: "{{BASE_URL}}/user/confirm?code=_ZeNxWqVWC6PhUVqe8-zx3zGZoDj4xqSa7BWoMR4Rhc"
+  url: "{{BASE_URL}}/user/confirm?code=XbYrqghlwvFolIvL77wa8DMxMhlKkxe0p_4Ab9aUnA4"
   params:
     - name: code
-      value: _ZeNxWqVWC6PhUVqe8-zx3zGZoDj4xqSa7BWoMR4Rhc
+      value: XbYrqghlwvFolIvL77wa8DMxMhlKkxe0p_4Ab9aUnA4
       type: query
   body:
     type: json

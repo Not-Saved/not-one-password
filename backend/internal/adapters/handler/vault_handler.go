@@ -1,12 +1,14 @@
 package handler
 
 import (
-	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"main/internal/adapters/middleware"
 	"main/internal/core/services"
 	"main/internal/oapi"
+	"mime/multipart"
+	"net/textproto"
 )
 
 type VaultHandler struct {
@@ -37,16 +39,35 @@ func (h *VaultHandler) GetUserVault(ctx context.Context, request oapi.GetUserVau
 		}, nil
 	}
 
-	reader := bytes.NewReader(vault.Vault)
-	contentLength := int64(len(vault.Vault))
-	return oapi.GetUserVault200ApplicationoctetStreamResponse{
-		Body:          reader, // this will be returned as application/octet-stream
-		ContentLength: contentLength,
-	}, nil
+	return oapi.GetUserVault200MultipartResponse(func(writer *multipart.Writer) error {
+		// --- Part 1: JSON metadata ---
+		jsonHeader := textproto.MIMEHeader{}
+		jsonHeader.Set("Content-Type", "application/json")
+		jsonPart, err := writer.CreatePart(jsonHeader)
+		if err != nil {
+			return err
+		}
+		jsonContent := fmt.Sprintf(`{"updatedAt":"%d"}`, vault.UpdatedAt.Unix())
+		if _, err := jsonPart.Write([]byte(jsonContent)); err != nil {
+			return err
+		}
+
+		// --- Part 2: Binary vault ---
+		binaryHeader := textproto.MIMEHeader{}
+		binaryHeader.Set("Content-Type", "application/octet-stream")
+		binaryPart, err := writer.CreatePart(binaryHeader)
+		if err != nil {
+			return err
+		}
+		if _, err := binaryPart.Write(vault.Vault); err != nil {
+			return err
+		}
+
+		return nil
+	}), nil
 }
 
 func (h *VaultHandler) InsertUserVault(ctx context.Context, request oapi.InsertUserVaultRequestObject) (oapi.InsertUserVaultResponseObject, error) {
-	// Get the current user's ID from the access session
 	access, ok := middleware.GetAccessSession(ctx)
 	if !ok {
 		return oapi.InsertUserVault401JSONResponse{
@@ -55,7 +76,6 @@ func (h *VaultHandler) InsertUserVault(ctx context.Context, request oapi.InsertU
 		}, nil
 	}
 
-	// Read the raw binary vault from request body
 	vaultBytes, err := io.ReadAll(request.Body)
 	if err != nil {
 		return oapi.InsertUserVault500JSONResponse{
@@ -66,7 +86,6 @@ func (h *VaultHandler) InsertUserVault(ctx context.Context, request oapi.InsertU
 		}, nil
 	}
 
-	// Call the service to create or update the vault
 	_, err = h.vaultService.InsertVaultByUserID(ctx, access.UserID, vaultBytes)
 	if err != nil {
 		return oapi.InsertUserVault500JSONResponse{
@@ -77,6 +96,5 @@ func (h *VaultHandler) InsertUserVault(ctx context.Context, request oapi.InsertU
 		}, nil
 	}
 
-	// Return 204 No Content
 	return oapi.InsertUserVault204Response{}, nil
 }
