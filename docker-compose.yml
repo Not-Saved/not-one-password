@@ -12,9 +12,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
       - ./backend:/app
-    command: air -c .air.toml
 
   # migrate:
   #   build:
@@ -86,8 +87,6 @@ services:
       VITE_API_BASE_URL: ${VITE_API_BASE_URL}
     ports:
       - "${FRONTEND_PORT:-5173}:5173"
-    depends_on:
-      - backend
     volumes:
       - ./frontend:/app
       - /app/node_modules
