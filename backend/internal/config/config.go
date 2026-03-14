@@ -35,10 +35,11 @@ func (db DBConfig) ConnString() string {
 }
 
 type Config struct {
-	DB      DBConfig
-	Redis   RedisConfig
-	SMTP    SMTPConfig
-	AppPort string
+	DB             DBConfig
+	Redis          RedisConfig
+	SMTP           SMTPConfig
+	AppPort        string
+	AppFrontendUrl string
 }
 
 func Load() Config {
@@ -61,7 +62,8 @@ func Load() Config {
 			Password: getEnv("SMTP_PASSWORD", ""),
 			From:     mustGetEnv("SMTP_FROM"),
 		},
-		AppPort: getEnv("APP_PORT", "8080"),
+		AppPort:        getEnv("APP_PORT", "8080"),
+		AppFrontendUrl: mustGetEnv("APP_FRONTEND_URL"),
 	}
 }
 

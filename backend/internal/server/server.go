@@ -35,6 +35,7 @@ func (s *Server) RegisterHandlersAndMiddlewares(handlers *bootstrap.Handlers, mi
 	handler := oapi.HandlerFromMux(si, http.NewServeMux())
 	handler = middlewares.OapiRequestValidatorMiddleware(handler, spec)
 	handler = middlewares.ClientInfoMiddleware(handler)
+	handler = middlewares.CORSMiddleware(handler)
 	s.mux.Handle("/api/", http.StripPrefix("/api", handler))
 }
 

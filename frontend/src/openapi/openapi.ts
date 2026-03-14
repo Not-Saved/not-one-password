@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Logout current user */
+        post: operations["LogoutUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/refresh": {
         parameters: {
             query?: never;
@@ -56,6 +73,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/user/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a new user */
+        post: operations["ConfirmUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/user/vault": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get current user's vault */
+        get: operations["GetUserVault"];
+        put?: never;
+        /** Create or update current user's vault */
+        post: operations["InsertUserVault"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/user/vault/poll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get current user's vault */
+        get: operations["PollUserVault"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/users": {
         parameters: {
             query?: never;
@@ -99,41 +168,16 @@ export interface components {
             password: string;
         };
         TokenResponse: {
-            /** @description JWT access token */
-            accessToken: string;
-            /**
-             * @description Access token expiration time in seconds
-             * @example 900
-             */
-            expiresIn: number;
-            /** @description Refresh token */
-            refreshToken: string;
-            /** @example Bearer */
-            tokenType?: string;
-        };
-        User: {
-            /**
-             * Format: date-time
-             * @example 2026-02-23T12:00:00Z
-             */
-            CreatedAt?: string;
-            /**
-             * Format: email
-             * @example john@example.com
-             */
-            Email?: string;
-            /**
-             * Format: int32
-             * @example 1
-             */
-            ID?: number;
-            /** @example John Doe */
-            Name?: string;
+            /** @description Base64 representation of the token */
+            token: string;
         };
         UserResponse: {
+            /** Format: email */
             email: string;
+            /** Format: uuid */
             id: string;
-            username: string;
+            /** @example John Doe */
+            name?: string;
         };
     };
     responses: {
@@ -177,12 +221,47 @@ export type SchemaCreateUserRequest = components['schemas']['CreateUserRequest']
 export type SchemaErrorResponse = components['schemas']['ErrorResponse'];
 export type SchemaLoginRequest = components['schemas']['LoginRequest'];
 export type SchemaTokenResponse = components['schemas']['TokenResponse'];
-export type SchemaUser = components['schemas']['User'];
 export type SchemaUserResponse = components['schemas']['UserResponse'];
 export type ResponseBadRequest = components['responses']['BadRequest'];
 export type ResponseInternalServerError = components['responses']['InternalServerError'];
 export type $defs = Record<string, never>;
 export interface operations {
+    LogoutUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Logout successful, tokens revoked */
+            204: {
+                headers: {
+                    /** @description Updated HttpOnly cookies */
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized, user not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "code": 401,
+                     *       "message": "User not authenticated"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            500: components["responses"]["InternalServerError"];
+        };
+    };
     RefreshToken: {
         parameters: {
             query?: never;
@@ -318,11 +397,152 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    ConfirmUser: {
+        parameters: {
+            query: {
+                /** @description Email confirmation code */
+                code: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description User created successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
-                    "application/json": components["schemas"]["User"];
+                    "application/json": components["schemas"]["UserResponse"];
                 };
             };
             400: components["responses"]["BadRequest"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    GetUserVault: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Vault retrieved successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "multipart/mixed": unknown;
+                    schema: unknown;
+                };
+            };
+            /** @description User not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Vault not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    InsertUserVault: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description Vault stored successfully */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description User not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    PollUserVault: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Vault retrieved successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /**
+                         * Format: int64
+                         * @description Unix epoch timestamp (seconds since 1970-01-01T00:00:00Z)
+                         * @example 1678698245
+                         */
+                        updatedAt: number;
+                    };
+                };
+            };
+            /** @description User not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Vault not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             500: components["responses"]["InternalServerError"];
         };
     };
@@ -341,7 +561,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["User"][];
+                    "application/json": components["schemas"]["UserResponse"][];
                 };
             };
             500: components["responses"]["InternalServerError"];

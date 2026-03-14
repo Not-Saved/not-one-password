@@ -77,6 +77,10 @@ func (s *UserService) CreateUser(ctx context.Context, name, email, password stri
 
 	err = s.userNotifier.NotifyRegistrationIntent(email, registrationToken.Code)
 	if err != nil {
+		err := s.userIntentRepository.DeleteRegistrationIntent(ctx, email)
+		if err != nil {
+			return nil, err
+		}
 		return nil, err
 	}
 

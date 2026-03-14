@@ -28,7 +28,7 @@ func main() {
 	adapters := bootstrap.NewAdapters(dbConn, redisConn, smtpClient)
 	services := bootstrap.NewServices(adapters)
 	handlers := bootstrap.NewHandlers(services)
-	middlewares := bootstrap.NewMiddlewares(services)
+	middlewares := bootstrap.NewMiddlewares(services, &cfg)
 
 	srv := server.New(cfg.AppPort)
 	srv.RegisterHandlersAndMiddlewares(handlers, middlewares)

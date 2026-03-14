@@ -6,24 +6,33 @@ import (
 )
 
 type SMTPClient struct {
-	address string
-	from    string
+	address  string
+	from     string
+	password string
+	host     string
 }
 
 func NewSMTPclient(cfg config.SMTPConfig) *SMTPClient {
 	address := cfg.Host + ":" + cfg.Port
 
 	return &SMTPClient{
-		address: address,
-		from:    cfg.From,
+		host:     cfg.Host,
+		address:  address,
+		from:     cfg.From,
+		password: cfg.Password,
 	}
 }
 
 func (c *SMTPClient) SendEmail(to, subject, body string) error {
 	message := c.BuildEmail(to, subject, body)
+	var auth smtp.Auth
+
+	if c.password != "" {
+		auth = smtp.PlainAuth("", c.from, c.password, c.host)
+	}
 	return smtp.SendMail(
 		c.address,
-		nil,
+		auth,
 		c.from,
 		[]string{to},
 		message,

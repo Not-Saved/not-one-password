@@ -1,4 +1,11 @@
-<script setup lang="ts"></script>
+<script setup lang="ts">
+import { client } from './openapi/fetch'
+
+// await client.POST('/token', {
+//   body: { deviceID: 'web', email: 'test@test.it', password: 'password' },
+// })
+client.GET('/user')
+</script>
 
 <template>
   <h1>You did it!</h1>
