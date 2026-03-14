@@ -127,7 +127,7 @@ type Vault = {
 }
 
 // ---------- Vault Operations ----------
-async function createVault(masterPassword: string): Promise<Vault> {
+export async function createVault(masterPassword: string): Promise<Vault> {
   const salt = crypto.getRandomValues(new Uint8Array(16))
   const key = await deriveKey(masterPassword, salt)
   const verification = await encryptEntry(key, { check: 'vault' })
@@ -142,7 +142,7 @@ async function createVault(masterPassword: string): Promise<Vault> {
   }
 }
 
-async function verifyMasterPassword(vault: Vault, masterPassword: string): Promise<boolean> {
+export async function verifyMasterPassword(vault: Vault, masterPassword: string): Promise<boolean> {
   const salt = fromBase64(vault.kdf.salt)
   const key = await deriveKey(masterPassword, salt)
   try {
@@ -282,7 +282,7 @@ async function demo() {
   console.log(decompressedVault)
 }
 
-async function compressVault(vault: object): Promise<Uint8Array> {
+export async function compressVault(vault: object): Promise<Uint8Array> {
   const vaultString = JSON.stringify(vault)
   const encoder = new TextEncoder()
   const vaultBytes = encoder.encode(vaultString)
@@ -322,7 +322,7 @@ async function compressVault(vault: object): Promise<Uint8Array> {
 }
 
 // Decompress a GZIP-compressed Uint8Array in the browser
-async function decompressVault(compressed: Uint8Array): Promise<object> {
+export async function decompressVault(compressed: Uint8Array): Promise<Vault> {
   // 1️⃣ Create a ReadableStream from the compressed bytes
   const readable = new ReadableStream({
     start(controller) {
@@ -374,4 +374,3 @@ async function compareVaultCompression(vault: object) {
 
   return { original: vaultBytes.length, compressed: compressed.length, ratio }
 }
-demo()

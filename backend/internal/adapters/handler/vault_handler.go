@@ -8,7 +8,6 @@ import (
 	"main/internal/core/services"
 	"main/internal/oapi"
 	"mime/multipart"
-	"net/textproto"
 )
 
 type VaultHandler struct {
@@ -45,26 +44,24 @@ func (h *VaultHandler) GetUserVault(ctx context.Context, request oapi.GetUserVau
 	}
 
 	return oapi.GetUserVault200MultipartResponse(func(writer *multipart.Writer) error {
-		// --- Part 1: JSON metadata ---
-		jsonHeader := textproto.MIMEHeader{}
-		jsonHeader.Set("Content-Type", "application/json")
-		jsonPart, err := writer.CreatePart(jsonHeader)
+		// --- Part 1: updatedAt field ---
+		updatedAtPart, err := writer.CreateFormField("updatedAt") // name="updatedAt"
 		if err != nil {
 			return err
 		}
-		jsonContent := fmt.Sprintf(`{"updatedAt":"%d"}`, vault.UpdatedAt.Unix())
-		if _, err := jsonPart.Write([]byte(jsonContent)); err != nil {
+
+		// Write the timestamp as a string
+		if _, err := updatedAtPart.Write([]byte(fmt.Sprintf("%d", vault.UpdatedAt.Unix()))); err != nil {
 			return err
 		}
 
 		// --- Part 2: Binary vault ---
-		binaryHeader := textproto.MIMEHeader{}
-		binaryHeader.Set("Content-Type", "application/octet-stream")
-		binaryPart, err := writer.CreatePart(binaryHeader)
+		filePart, err := writer.CreateFormFile("vaultFile", "vault.zip") // sets name & filename
 		if err != nil {
 			return err
 		}
-		if _, err := binaryPart.Write(vault.Vault); err != nil {
+
+		if _, err := filePart.Write(vault.Vault); err != nil {
 			return err
 		}
 

@@ -443,7 +443,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "multipart/mixed": unknown;
+                    "multipart/form-data": unknown;
                     schema: unknown;
                 };
             };

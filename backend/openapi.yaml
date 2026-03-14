@@ -192,7 +192,7 @@ paths:
         "200":
           description: Vault retrieved successfully
           content:
-            multipart/mixed:
+            multipart/form-data:
             schema:
               type: object
               properties:
