@@ -117,13 +117,18 @@ type DecryptedVaultEntry = {
   [key: string]: any
 }
 
-type Vault = {
+export type Vault = {
   version: number
   kdf: { algorithm: string; hash: string; iterations: number; salt: string }
   verification: VerificationBlock
   entries: VaultEntry[]
-  createdAt: number
-  updatedAt: number
+}
+
+export type DecryptedVault = {
+  version: number
+  kdf: { algorithm: string; hash: string; iterations: number; salt: string }
+  verification: VerificationBlock
+  entries: DecryptedVaultEntry[]
 }
 
 // ---------- Vault Operations ----------
@@ -131,14 +136,11 @@ export async function createVault(masterPassword: string): Promise<Vault> {
   const salt = crypto.getRandomValues(new Uint8Array(16))
   const key = await deriveKey(masterPassword, salt)
   const verification = await encryptEntry(key, { check: 'vault' })
-  const now = Date.now()
   return {
     version: 1,
     kdf: { algorithm: 'PBKDF2', hash: 'SHA-256', iterations: 600_000, salt: toBase64(salt.buffer) },
     verification,
     entries: [],
-    createdAt: now,
-    updatedAt: now,
   }
 }
 
@@ -153,7 +155,7 @@ export async function verifyMasterPassword(vault: Vault, masterPassword: string)
   }
 }
 
-async function addEntry(
+export async function addEntry(
   vault: Vault,
   masterPassword: string,
   entryData: { password: string; [key: string]: any },
@@ -172,7 +174,17 @@ async function addEntry(
 
   const now = Date.now()
   vault.entries.push({ id: crypto.randomUUID(), ...encryptedEntry, createdAt: now, updatedAt: now })
-  vault.updatedAt = now
+}
+
+export async function decryptVault(vault: Vault, masterPassword: string): Promise<DecryptedVault> {
+  const salt = fromBase64(vault.kdf.salt)
+  const vaultKey = await deriveKey(masterPassword, salt)
+  const decryptedEntries: DecryptedVaultEntry[] = []
+  for (const entry of vault.entries) {
+    const decrypted = await decryptEntry<DecryptedVaultEntry>(vaultKey, entry)
+    decryptedEntries.push(decrypted)
+  }
+  return { ...vault, entries: decryptedEntries }
 }
 
 async function decryptVaultEntry(
@@ -242,7 +254,6 @@ async function rotateMasterPassword(
   vault.kdf.iterations = 600_000 // keep PBKDF2 params same (or change if desired)
   vault.verification = newVerification
   vault.entries = newEntries
-  vault.updatedAt = Date.now()
 }
 // ---------- Demo ----------
 async function demo() {
